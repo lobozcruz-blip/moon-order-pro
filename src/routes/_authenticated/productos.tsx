@@ -34,7 +34,7 @@ import {
   type Modality,
 } from "@/lib/cm";
 import { uploadFile, removeFile, logActivity } from "@/lib/storage";
-import { StoredImage } from "@/components/StoredImage";
+import { StoredImage, type ImgRef } from "@/components/StoredImage";
 import { ImageViewer } from "@/components/ImageViewer";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -93,7 +93,7 @@ function Productos() {
   const [draft, setDraft] = useState<Draft>(empty);
   const [saving, setSaving] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
-  const [viewer, setViewer] = useState<{ paths: string[]; index: number } | null>(null);
+  const [viewer, setViewer] = useState<{ images: ImgRef[]; title: string } | null>(null);
 
   const rows = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -146,8 +146,8 @@ function Productos() {
         id = data.id;
       }
       for (const f of files) {
-        const path = await uploadFile("catalogo", f, id);
-        await supabase.from("product_images").insert({ product_id: id, path, file_name: f.name });
+        const storage_path = await uploadFile("catalogo", f, id!);
+        await supabase.from("product_images").insert({ product_id: id!, storage_path });
       }
       await logActivity({
         action: draft.id ? "Producto actualizado" : "Producto creado",
@@ -179,9 +179,9 @@ function Productos() {
     invalidate("products", "activity");
   };
 
-  const deleteImage = async (imgId: string, path: string) => {
+  const deleteImage = async (imgId: string, path: string | null) => {
     await supabase.from("product_images").delete().eq("id", imgId);
-    await removeFile(path);
+    if (path) await removeFile(path);
     invalidate("products");
   };
 
@@ -241,10 +241,10 @@ function Productos() {
             <div key={p.id} className="panel overflow-hidden">
               <button
                 className="block aspect-square w-full bg-secondary"
-                onClick={() => imgs.length && setViewer({ paths: imgs.map((i) => i.path), index: 0 })}
+                onClick={() => imgs.length && setViewer({ images: imgs, title: p.name })}
               >
                 {imgs[0] ? (
-                  <StoredImage path={imgs[0].path} alt={p.name} className="h-full w-full object-cover" />
+                  <StoredImage image={imgs[0]} alt={p.name} className="h-full w-full object-cover" />
                 ) : (
                   <span className="flex h-full items-center justify-center text-xs text-muted-foreground">
                     Sin imagen
@@ -316,13 +316,13 @@ function Productos() {
                           aria-label="Marcar como principal"
                           className="block h-8 w-8 overflow-hidden rounded border border-border"
                         >
-                          <StoredImage path={im.path} alt="" className="h-full w-full object-cover" />
+                          <StoredImage image={im} alt="" className="h-full w-full object-cover" />
                         </button>
                         {im.is_primary && (
                           <Star className="absolute -right-1 -top-1 h-3 w-3 fill-primary text-primary" />
                         )}
                         <button
-                          onClick={() => deleteImage(im.id, im.path)}
+                          onClick={() => deleteImage(im.id, im.storage_path)}
                           aria-label="Quitar imagen"
                           className="absolute -left-1 -top-1 rounded-full bg-destructive p-0.5"
                         >
@@ -464,9 +464,12 @@ function Productos() {
         </DialogContent>
       </Dialog>
 
-      {viewer && (
-        <ImageViewer paths={viewer.paths} index={viewer.index} onClose={() => setViewer(null)} />
-      )}
+      <ImageViewer
+        open={!!viewer}
+        onOpenChange={(v) => !v && setViewer(null)}
+        images={viewer?.images ?? []}
+        title={viewer?.title ?? "Imágenes"}
+      />
     </>
   );
 }
