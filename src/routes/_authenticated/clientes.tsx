@@ -87,7 +87,10 @@ function Clientes() {
   };
 
   const save = async () => {
-    if (!draft.first_name.trim()) return toast.error("El nombre es obligatorio");
+    if (!draft.first_name.trim()) {
+      toast.error("El nombre es obligatorio");
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -120,7 +123,10 @@ function Clientes() {
   const remove = async (id: string, name: string) => {
     if (!confirm(`¿Eliminar a ${name}? Los pedidos existentes se conservarán sin cliente.`)) return;
     const { error } = await supabase.from("customers").delete().eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     await logActivity({ action: "Cliente eliminado", entity: "customer", detail: name });
     toast.success("Cliente eliminado");
     invalidate("customers", "orders", "activity");
