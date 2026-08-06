@@ -32,9 +32,9 @@ type Row = {
   nombre?: string;
   categoria?: string;
   descripcion?: string;
-  precio_base?: string | number;
+  precio_base?: string | number | undefined;
   notas_fabricacion?: string;
-  activo?: string | boolean;
+  activo?: string | boolean | undefined;
 };
 
 const norm = (s: string) =>
