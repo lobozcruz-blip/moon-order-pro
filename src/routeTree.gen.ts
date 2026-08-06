@@ -19,6 +19,7 @@ import { Route as AuthenticatedNuevoPedidoRouteImport } from './routes/_authenti
 import { Route as AuthenticatedPanelRouteImport } from './routes/_authenticated/panel'
 import { Route as AuthenticatedProductosRouteImport } from './routes/_authenticated/productos'
 import { Route as AuthenticatedPedidosIndexRouteImport } from './routes/_authenticated/pedidos.index'
+import { Route as AuthenticatedPedidosOrderIdRouteImport } from './routes/_authenticated/pedidos.$orderId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -73,6 +74,12 @@ const AuthenticatedPedidosIndexRoute =
     path: '/pedidos/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedPedidosOrderIdRoute =
+  AuthenticatedPedidosOrderIdRouteImport.update({
+    id: '/pedidos/$orderId',
+    path: '/pedidos/$orderId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -83,6 +90,7 @@ export interface FileRoutesByFullPath {
   '/nuevo-pedido': typeof AuthenticatedNuevoPedidoRoute
   '/panel': typeof AuthenticatedPanelRoute
   '/productos': typeof AuthenticatedProductosRoute
+  '/pedidos/$orderId': typeof AuthenticatedPedidosOrderIdRoute
   '/pedidos/': typeof AuthenticatedPedidosIndexRoute
 }
 export interface FileRoutesByTo {
@@ -94,6 +102,7 @@ export interface FileRoutesByTo {
   '/nuevo-pedido': typeof AuthenticatedNuevoPedidoRoute
   '/panel': typeof AuthenticatedPanelRoute
   '/productos': typeof AuthenticatedProductosRoute
+  '/pedidos/$orderId': typeof AuthenticatedPedidosOrderIdRoute
   '/pedidos': typeof AuthenticatedPedidosIndexRoute
 }
 export interface FileRoutesById {
@@ -107,6 +116,7 @@ export interface FileRoutesById {
   '/_authenticated/nuevo-pedido': typeof AuthenticatedNuevoPedidoRoute
   '/_authenticated/panel': typeof AuthenticatedPanelRoute
   '/_authenticated/productos': typeof AuthenticatedProductosRoute
+  '/_authenticated/pedidos/$orderId': typeof AuthenticatedPedidosOrderIdRoute
   '/_authenticated/pedidos/': typeof AuthenticatedPedidosIndexRoute
 }
 export interface FileRouteTypes {
@@ -120,6 +130,7 @@ export interface FileRouteTypes {
     | '/nuevo-pedido'
     | '/panel'
     | '/productos'
+    | '/pedidos/$orderId'
     | '/pedidos/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -131,6 +142,7 @@ export interface FileRouteTypes {
     | '/nuevo-pedido'
     | '/panel'
     | '/productos'
+    | '/pedidos/$orderId'
     | '/pedidos'
   id:
     | '__root__'
@@ -143,6 +155,7 @@ export interface FileRouteTypes {
     | '/_authenticated/nuevo-pedido'
     | '/_authenticated/panel'
     | '/_authenticated/productos'
+    | '/_authenticated/pedidos/$orderId'
     | '/_authenticated/pedidos/'
   fileRoutesById: FileRoutesById
 }
@@ -224,6 +237,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPedidosIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/pedidos/$orderId': {
+      id: '/_authenticated/pedidos/$orderId'
+      path: '/pedidos/$orderId'
+      fullPath: '/pedidos/$orderId'
+      preLoaderRoute: typeof AuthenticatedPedidosOrderIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
@@ -234,6 +254,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedNuevoPedidoRoute: typeof AuthenticatedNuevoPedidoRoute
   AuthenticatedPanelRoute: typeof AuthenticatedPanelRoute
   AuthenticatedProductosRoute: typeof AuthenticatedProductosRoute
+  AuthenticatedPedidosOrderIdRoute: typeof AuthenticatedPedidosOrderIdRoute
   AuthenticatedPedidosIndexRoute: typeof AuthenticatedPedidosIndexRoute
 }
 
@@ -244,6 +265,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedNuevoPedidoRoute: AuthenticatedNuevoPedidoRoute,
   AuthenticatedPanelRoute: AuthenticatedPanelRoute,
   AuthenticatedProductosRoute: AuthenticatedProductosRoute,
+  AuthenticatedPedidosOrderIdRoute: AuthenticatedPedidosOrderIdRoute,
   AuthenticatedPedidosIndexRoute: AuthenticatedPedidosIndexRoute,
 }
 

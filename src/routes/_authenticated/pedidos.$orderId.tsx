@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { useOrder, useInvalidate, useProfiles, useActivity } from "@/lib/queries";
 import {
   ORDER_STATUSES,
@@ -85,7 +86,9 @@ function DetallePedido() {
   const pct = totalUnits ? Math.round((doneUnits / totalUnits) * 100) : 0;
   const wa = whatsappLink(order.customers?.phone);
 
-  const patchOrder = async (patch: Record<string, unknown>, label: string) => {
+  type OrderPatch = Database["public"]["Tables"]["orders"]["Update"];
+
+  const patchOrder = async (patch: OrderPatch, label: string) => {
     const { error } = await supabase.from("orders").update(patch).eq("id", orderId);
     if (error) {
       toast.error(error.message);
