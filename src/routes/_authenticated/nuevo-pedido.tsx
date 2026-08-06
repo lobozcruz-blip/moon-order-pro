@@ -258,9 +258,10 @@ function NuevoPedido() {
         await supabase.from("order_notes").insert({
           order_id: order.id,
           body: note.trim(),
-          user_id: u.user?.id ?? null,
+          created_by: u.user?.id ?? null,
         });
       }
+
 
       await supabase.rpc("assign_folio", { _order_id: order.id });
       await supabase.rpc("recalc_order", { _order_id: order.id });
