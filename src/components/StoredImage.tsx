@@ -10,7 +10,7 @@ export type ImgRef = {
   label?: string;
 };
 
-export function useImgSrc(ref?: ImgRef | null) {
+export function useImgSrc(ref?: ImgRef | null | undefined) {
   const [src, setSrc] = useState<string | null>(ref?.external_url ?? null);
   useEffect(() => {
     let alive = true;
