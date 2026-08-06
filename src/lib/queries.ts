@@ -76,7 +76,7 @@ export async function fetchOrders() {
   const { data, error } = await supabase
     .from("orders")
     .select(
-      "*, customers(id, first_name, last_name, phone), order_items(id, quantity, done_quantity, is_done, category), profiles:assignee_id(full_name)",
+      "*, customers(id, first_name, last_name, phone), order_items(id, quantity, done_quantity, is_done, category)",
     )
     .eq("is_draft", false)
     .order("created_at", { ascending: false });
@@ -112,7 +112,7 @@ export function useActivity(orderId?: string) {
     queryFn: async () => {
       let q = supabase
         .from("activity_log")
-        .select("*, profiles:user_id(full_name, email)")
+        .select("*")
         .order("created_at", { ascending: false })
         .limit(orderId ? 200 : 60);
       if (orderId) q = q.eq("order_id", orderId);
