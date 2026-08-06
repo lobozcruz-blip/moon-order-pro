@@ -35,10 +35,11 @@ export function StoredImage({
   className,
   alt = "Imagen",
 }: {
-  image?: ImgRef | null;
-  className?: string;
-  alt?: string;
+  image?: ImgRef | null | undefined;
+  className?: string | undefined;
+  alt?: string | undefined;
 }) {
+
   const src = useImgSrc(image);
   if (!src)
     return (
