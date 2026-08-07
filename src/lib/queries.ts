@@ -8,13 +8,16 @@ export function useProducts(includeInactive = true) {
     queryFn: async () => {
       let q = supabase
         .from("products")
-        .select("*, product_images(*)")
+        .select(
+          "*, product_images(id, storage_path, external_url, is_primary, sort_order, kind)",
+        )
         .order("created_at", { ascending: false });
       if (!includeInactive) q = q.eq("active", true);
       const { data, error } = await q;
       if (error) throw error;
       return data ?? [];
     },
+    staleTime: 120_000,
   });
 }
 
@@ -28,6 +31,7 @@ export function useProductSalesCounts() {
       for (const r of data ?? []) if (r.product_id) map[r.product_id] = (map[r.product_id] ?? 0) + r.quantity;
       return map;
     },
+    staleTime: 120_000,
   });
 }
 
@@ -42,8 +46,10 @@ export function useCustomers() {
       if (error) throw error;
       return data ?? [];
     },
+    staleTime: 120_000,
   });
 }
+
 
 export function usePriceRules() {
   return useQuery({
