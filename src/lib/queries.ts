@@ -8,13 +8,16 @@ export function useProducts(includeInactive = true) {
     queryFn: async () => {
       let q = supabase
         .from("products")
-        .select("*, product_images(*)")
+        .select(
+          "*, product_images(id, storage_path, external_url, is_primary, sort_order, kind)",
+        )
         .order("created_at", { ascending: false });
       if (!includeInactive) q = q.eq("active", true);
       const { data, error } = await q;
       if (error) throw error;
       return data ?? [];
     },
+    staleTime: 120_000,
   });
 }
 
@@ -28,6 +31,7 @@ export function useProductSalesCounts() {
       for (const r of data ?? []) if (r.product_id) map[r.product_id] = (map[r.product_id] ?? 0) + r.quantity;
       return map;
     },
+    staleTime: 120_000,
   });
 }
 
@@ -42,8 +46,10 @@ export function useCustomers() {
       if (error) throw error;
       return data ?? [];
     },
+    staleTime: 120_000,
   });
 }
+
 
 export function usePriceRules() {
   return useQuery({
@@ -85,7 +91,7 @@ export async function fetchOrders() {
 }
 
 export function useOrders() {
-  return useQuery({ queryKey: ["orders"], queryFn: fetchOrders });
+  return useQuery({ queryKey: ["orders"], queryFn: fetchOrders, staleTime: 15_000 });
 }
 
 export function useOrder(id: string) {
@@ -95,7 +101,7 @@ export function useOrder(id: string) {
       const { data, error } = await supabase
         .from("orders")
         .select(
-          "*, customers(*), order_items(*, order_item_images(*), products(id, sku, product_images(*))), order_notes(*, note_attachments(*)), payments(*, payment_attachments(*)), shipping_details(*), personal_delivery_details(*)",
+          "*, customers(*), order_items(*, order_item_images(*), products(id, sku, product_images(id, storage_path, external_url, is_primary))), order_notes(*, note_attachments(*)), payments(*, payment_attachments(*)), shipping_details(*), personal_delivery_details(*)",
         )
         .eq("id", id)
         .maybeSingle();
@@ -103,6 +109,7 @@ export function useOrder(id: string) {
       return data;
     },
     enabled: !!id,
+    staleTime: 15_000,
   });
 }
 
@@ -120,6 +127,7 @@ export function useActivity(orderId?: string) {
       if (error) throw error;
       return data ?? [];
     },
+    staleTime: 30_000,
   });
 }
 
@@ -127,11 +135,16 @@ export function useProfiles() {
   return useQuery({
     queryKey: ["profiles"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("profiles").select("*").order("full_name");
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, email, full_name, phone, active")
+        .order("full_name");
       if (error) throw error;
       return data ?? [];
     },
+    staleTime: 300_000,
   });
+
 }
 
 export function useInvalidate() {

@@ -27,16 +27,24 @@ export async function uploadBlob(folder: Folder, name: string, blob: Blob, keyHi
 }
 
 const cache = new Map<string, { url: string; exp: number }>();
+const inflight = new Map<string, Promise<string | null>>();
 
 export async function signedUrl(path: string | null | undefined) {
   if (!path) return null;
   const hit = cache.get(path);
   if (hit && hit.exp > Date.now()) return hit.url;
-  const { data } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600);
-  if (!data?.signedUrl) return null;
-  cache.set(path, { url: data.signedUrl, exp: Date.now() + 3000_000 });
-  return data.signedUrl;
+  const pending = inflight.get(path);
+  if (pending) return pending;
+  const p = (async () => {
+    const { data } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600);
+    if (!data?.signedUrl) return null;
+    cache.set(path, { url: data.signedUrl, exp: Date.now() + 3000_000 });
+    return data.signedUrl;
+  })().finally(() => inflight.delete(path));
+  inflight.set(path, p);
+  return p;
 }
+
 
 export async function removeFile(path: string) {
   await supabase.storage.from(BUCKET).remove([path]);
