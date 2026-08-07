@@ -948,8 +948,8 @@ export type Database = {
       ensure_profile: {
         Args: { _full_name?: string }
         Returns: {
-          id: string
-          role: Database["public"]["Enums"]["app_role"]
+          out_id: string
+          out_role: Database["public"]["Enums"]["app_role"]
         }[]
       }
       has_role: {
