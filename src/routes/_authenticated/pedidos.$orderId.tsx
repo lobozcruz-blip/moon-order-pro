@@ -143,7 +143,7 @@ function DetallePedido() {
 
   return (
     <>
-      <Link to="/pedidos" className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground">
+      <Link to="/pedidos" search={{ cliente: undefined }} className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground">
         <ArrowLeft className="h-4 w-4" /> Volver a pedidos
       </Link>
 
