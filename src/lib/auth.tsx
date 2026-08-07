@@ -42,14 +42,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!session?.user) return;
     let cancelled = false;
     (async () => {
-      const { data } = await supabase.rpc("ensure_profile", {});
-      const r = Array.isArray(data) && data[0] ? (data[0].role as AppRole) : null;
+      const uid = session.user.id;
+      const { data, error } = await supabase.rpc("ensure_profile", {});
+      let r: AppRole | null =
+        Array.isArray(data) && data[0] ? (data[0].out_role as AppRole) : null;
+      if (error) console.error("ensure_profile", error);
+      if (!r) {
+        const { data: roles } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", uid)
+          .order("role")
+          .limit(1);
+        r = (roles?.[0]?.role as AppRole) ?? null;
+      }
       if (!cancelled) setRole(r ?? "colaborador");
     })();
     return () => {
       cancelled = true;
     };
   }, [session?.user?.id]);
+
 
   const value: AuthValue = {
     session,
