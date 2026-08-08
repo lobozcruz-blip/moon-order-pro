@@ -10,6 +10,9 @@ import { needsBootstrap, createFirstAdmin } from "@/lib/users.functions";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s['next'] === "string" && s['next'].startsWith("/") ? s['next'] : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Acceso — Cookies Moon" },
@@ -26,20 +29,29 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
   const [bootstrap, setBootstrap] = useState(false);
 
+  const goNext = () => {
+    if (next) window.location.href = next;
+    else navigate({ to: "/panel", replace: true });
+  };
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/panel", replace: true });
+      if (data.session) {
+        if (next) window.location.href = next;
+        else navigate({ to: "/panel", replace: true });
+      }
     });
     needsBootstrap()
       .then((r) => setBootstrap(r.needsBootstrap))
       .catch(() => setBootstrap(false));
-  }, [navigate]);
+  }, [navigate, next]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +63,7 @@ function AuthPage() {
       }
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      navigate({ to: "/panel", replace: true });
+      goNext();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo iniciar sesión");
     } finally {

@@ -1,0 +1,198 @@
+{
+  "version": 1,
+  "sdk_version": "0.26.1",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://mcxluovwfvmohsffqurz.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "moon-order-manager",
+      "version": "0.1.0",
+      "title": "Moon Order Manager"
+    },
+    "tools": [
+      {
+        "name": "list_orders",
+        "title": "Listar pedidos",
+        "description": "Lista los pedidos de Cookies Moon con folio, cliente, estado, estado de pago y saldo. Permite filtrar por estado y buscar por folio o nombre de cliente.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "status": {
+              "description": "Filtrar por estado del pedido.",
+              "type": "string",
+              "enum": [
+                "en_espera",
+                "en_preparacion",
+                "enviado",
+                "finalizado",
+                "pausado",
+                "cancelado"
+              ]
+            },
+            "search": {
+              "description": "Buscar por folio.",
+              "type": "string"
+            },
+            "limit": {
+              "description": "Máximo de pedidos (por defecto 20).",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_order",
+        "title": "Ver detalle de pedido",
+        "description": "Devuelve el detalle completo de un pedido de Cookies Moon (artículos, avance de producción, pagos, notas y datos de entrega) buscándolo por folio o por identificador.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "folio": {
+              "description": "Folio del pedido, por ejemplo CM-2026-0007.",
+              "type": "string"
+            },
+            "order_id": {
+              "description": "Identificador interno del pedido.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_products",
+        "title": "Listar productos",
+        "description": "Lista el catálogo de Cookies Moon (SKU, nombre, categoría y precio base). Permite filtrar por categoría, por texto y por productos activos.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "category": {
+              "description": "Filtrar por categoría.",
+              "type": "string",
+              "enum": [
+                "CORTADORES",
+                "STENCILS",
+                "CAJAS",
+                "OTROS"
+              ]
+            },
+            "search": {
+              "description": "Buscar por nombre o SKU.",
+              "type": "string"
+            },
+            "only_active": {
+              "description": "Sólo productos activos (por defecto true).",
+              "type": "boolean"
+            },
+            "limit": {
+              "description": "Máximo de productos (por defecto 50).",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "search_customers",
+        "title": "Buscar clientes",
+        "description": "Busca clientes de Cookies Moon por nombre o teléfono y devuelve sus datos de contacto y notas internas.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "search": {
+              "description": "Nombre o teléfono a buscar.",
+              "type": "string"
+            },
+            "limit": {
+              "description": "Máximo de clientes (por defecto 20).",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "add_order_note",
+        "title": "Agregar nota a un pedido",
+        "description": "Agrega una nota interna a un pedido de Cookies Moon, opcionalmente marcada como importante.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "folio": {
+              "description": "Folio del pedido, por ejemplo CM-2026-0007.",
+              "type": "string"
+            },
+            "order_id": {
+              "description": "Identificador interno del pedido.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "title": {
+              "description": "Título breve de la nota.",
+              "type": "string"
+            },
+            "body": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Contenido de la nota."
+            },
+            "important": {
+              "description": "Marcar la nota como importante.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "body"
+          ]
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
