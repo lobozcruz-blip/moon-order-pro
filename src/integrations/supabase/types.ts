@@ -960,6 +960,8 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_staff: { Args: never; Returns: boolean }
+      owns_order: { Args: { _order_id: string }; Returns: boolean }
       purge_demo_data: { Args: never; Returns: undefined }
       recalc_order: { Args: { _order_id: string }; Returns: undefined }
       set_user_role: {
