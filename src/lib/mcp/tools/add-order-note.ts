@@ -43,7 +43,7 @@ export default defineTool({
         title: title ?? null,
         body,
         important: important ?? false,
-        created_by: ctx.getUserId(),
+        created_by: ctx.getUserId() ?? null,
       })
       .select("id, order_id, title, body, important, created_at")
       .maybeSingle();
