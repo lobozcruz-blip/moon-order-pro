@@ -1,0 +1,20 @@
+REVOKE EXECUTE ON FUNCTION public.set_updated_at() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.trg_recalc_order() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.is_staff() FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.owns_order(uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.has_role(uuid, public.app_role) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.is_admin() FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.ensure_profile(text) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.assign_folio(uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.recalc_order(uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.purge_demo_data() FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.set_user_role(uuid, public.app_role) FROM PUBLIC, anon, authenticated;
+
+GRANT EXECUTE ON FUNCTION public.ensure_profile(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.has_role(uuid, public.app_role) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_staff() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.owns_order(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.assign_folio(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.recalc_order(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.purge_demo_data() TO authenticated;
