@@ -21,6 +21,7 @@ import { Route as AuthenticatedImportacionesRouteImport } from './routes/_authen
 import { Route as AuthenticatedNuevoPedidoRouteImport } from './routes/_authenticated/nuevo-pedido'
 import { Route as AuthenticatedPanelRouteImport } from './routes/_authenticated/panel'
 import { Route as AuthenticatedProductosRouteImport } from './routes/_authenticated/productos'
+import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as AuthenticatedPedidosIndexRouteImport } from './routes/_authenticated/pedidos.index'
 import { Route as AuthenticatedPedidosOrderIdRouteImport } from './routes/_authenticated/pedidos.$orderId'
@@ -89,6 +90,11 @@ const AuthenticatedProductosRoute = AuthenticatedProductosRouteImport.update({
   path: '/productos',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
+  id: '/.lovable/oauth/consent',
+  path: '/.lovable/oauth/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const Char91DotmcpChar93InvokeToolToolRoute =
   Char91DotmcpChar93InvokeToolToolRouteImport.update({
     id: '/.mcp/invoke-tool/$tool',
@@ -120,6 +126,7 @@ export interface FileRoutesByFullPath {
   '/nuevo-pedido': typeof AuthenticatedNuevoPedidoRoute
   '/panel': typeof AuthenticatedPanelRoute
   '/productos': typeof AuthenticatedProductosRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/pedidos/$orderId': typeof AuthenticatedPedidosOrderIdRoute
   '/pedidos/': typeof AuthenticatedPedidosIndexRoute
@@ -136,6 +143,7 @@ export interface FileRoutesByTo {
   '/nuevo-pedido': typeof AuthenticatedNuevoPedidoRoute
   '/panel': typeof AuthenticatedPanelRoute
   '/productos': typeof AuthenticatedProductosRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/pedidos/$orderId': typeof AuthenticatedPedidosOrderIdRoute
   '/pedidos': typeof AuthenticatedPedidosIndexRoute
@@ -154,6 +162,7 @@ export interface FileRoutesById {
   '/_authenticated/nuevo-pedido': typeof AuthenticatedNuevoPedidoRoute
   '/_authenticated/panel': typeof AuthenticatedPanelRoute
   '/_authenticated/productos': typeof AuthenticatedProductosRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/_authenticated/pedidos/$orderId': typeof AuthenticatedPedidosOrderIdRoute
   '/_authenticated/pedidos/': typeof AuthenticatedPedidosIndexRoute
@@ -172,6 +181,7 @@ export interface FileRouteTypes {
     | '/nuevo-pedido'
     | '/panel'
     | '/productos'
+    | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/pedidos/$orderId'
     | '/pedidos/'
@@ -188,6 +198,7 @@ export interface FileRouteTypes {
     | '/nuevo-pedido'
     | '/panel'
     | '/productos'
+    | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/pedidos/$orderId'
     | '/pedidos'
@@ -205,6 +216,7 @@ export interface FileRouteTypes {
     | '/_authenticated/nuevo-pedido'
     | '/_authenticated/panel'
     | '/_authenticated/productos'
+    | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/_authenticated/pedidos/$orderId'
     | '/_authenticated/pedidos/'
@@ -217,6 +229,7 @@ export interface RootRouteChildren {
   McpRoute: typeof McpRoute
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
 }
 
@@ -306,6 +319,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProductosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/.lovable/oauth/consent': {
+      id: '/.lovable/oauth/consent'
+      path: '/.lovable/oauth/consent'
+      fullPath: '/.lovable/oauth/consent'
+      preLoaderRoute: typeof DotlovableOauthConsentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/.mcp/invoke-tool/$tool': {
       id: '/.mcp/invoke-tool/$tool'
       path: '/.mcp/invoke-tool/$tool'
@@ -363,6 +383,7 @@ const rootRouteChildren: RootRouteChildren = {
   Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
+  DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
 }
 export const routeTree = rootRouteImport
