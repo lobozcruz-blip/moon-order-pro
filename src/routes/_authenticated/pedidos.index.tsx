@@ -23,6 +23,8 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrders, useInvalidate, useProfiles } from "@/lib/queries";
+import { usePendingOrders } from "@/lib/shop-queries";
+
 import {
   KANBAN_STATUSES,
   ORDER_STATUSES,
