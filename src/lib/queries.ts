@@ -85,7 +85,9 @@ export async function fetchOrders() {
       "*, customers(id, first_name, last_name, phone), order_items(id, quantity, done_quantity, is_done, category)",
     )
     .eq("is_draft", false)
+    .neq("review_status", "pendiente")
     .order("created_at", { ascending: false });
+
   if (error) throw error;
   return data ?? [];
 }
