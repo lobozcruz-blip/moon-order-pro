@@ -114,9 +114,9 @@ function CarritoPage() {
         payload: payload as never,
       });
       if (error) throw error;
-      const result = data as unknown as { folio?: string } | null;
-      const folio = result?.folio;
+      const folio = typeof data === "string" ? data : "";
       if (!folio) throw new Error("No se pudo generar tu número de pedido.");
+
       cart.clear();
       navigate({ to: "/tienda/listo/$folio", params: { folio }, replace: true });
     } catch (err) {
