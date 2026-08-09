@@ -21,6 +21,7 @@ import { Route as AuthenticatedImportacionesRouteImport } from './routes/_authen
 import { Route as AuthenticatedNuevoPedidoRouteImport } from './routes/_authenticated/nuevo-pedido'
 import { Route as AuthenticatedPanelRouteImport } from './routes/_authenticated/panel'
 import { Route as AuthenticatedProductosRouteImport } from './routes/_authenticated/productos'
+import { Route as TiendaIndexRouteImport } from './routes/tienda.index'
 import { Route as TiendaAccesoRouteImport } from './routes/tienda.acceso'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
@@ -91,6 +92,11 @@ const AuthenticatedProductosRoute = AuthenticatedProductosRouteImport.update({
   path: '/productos',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const TiendaIndexRoute = TiendaIndexRouteImport.update({
+  id: '/tienda/',
+  path: '/tienda/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TiendaAccesoRoute = TiendaAccesoRouteImport.update({
   id: '/tienda/acceso',
   path: '/tienda/acceso',
@@ -133,6 +139,7 @@ export interface FileRoutesByFullPath {
   '/panel': typeof AuthenticatedPanelRoute
   '/productos': typeof AuthenticatedProductosRoute
   '/tienda/acceso': typeof TiendaAccesoRoute
+  '/tienda/': typeof TiendaIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/pedidos/$orderId': typeof AuthenticatedPedidosOrderIdRoute
@@ -151,6 +158,7 @@ export interface FileRoutesByTo {
   '/panel': typeof AuthenticatedPanelRoute
   '/productos': typeof AuthenticatedProductosRoute
   '/tienda/acceso': typeof TiendaAccesoRoute
+  '/tienda': typeof TiendaIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/pedidos/$orderId': typeof AuthenticatedPedidosOrderIdRoute
@@ -171,6 +179,7 @@ export interface FileRoutesById {
   '/_authenticated/panel': typeof AuthenticatedPanelRoute
   '/_authenticated/productos': typeof AuthenticatedProductosRoute
   '/tienda/acceso': typeof TiendaAccesoRoute
+  '/tienda/': typeof TiendaIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/_authenticated/pedidos/$orderId': typeof AuthenticatedPedidosOrderIdRoute
@@ -191,6 +200,7 @@ export interface FileRouteTypes {
     | '/panel'
     | '/productos'
     | '/tienda/acceso'
+    | '/tienda/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/pedidos/$orderId'
@@ -209,6 +219,7 @@ export interface FileRouteTypes {
     | '/panel'
     | '/productos'
     | '/tienda/acceso'
+    | '/tienda'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/pedidos/$orderId'
@@ -228,6 +239,7 @@ export interface FileRouteTypes {
     | '/_authenticated/panel'
     | '/_authenticated/productos'
     | '/tienda/acceso'
+    | '/tienda/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/_authenticated/pedidos/$orderId'
@@ -242,6 +254,7 @@ export interface RootRouteChildren {
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   TiendaAccesoRoute: typeof TiendaAccesoRoute
+  TiendaIndexRoute: typeof TiendaIndexRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
 }
@@ -332,6 +345,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProductosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/tienda/': {
+      id: '/tienda/'
+      path: '/tienda'
+      fullPath: '/tienda/'
+      preLoaderRoute: typeof TiendaIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tienda/acceso': {
       id: '/tienda/acceso'
       path: '/tienda/acceso'
@@ -404,6 +424,7 @@ const rootRouteChildren: RootRouteChildren = {
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
   TiendaAccesoRoute: TiendaAccesoRoute,
+  TiendaIndexRoute: TiendaIndexRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
 }
