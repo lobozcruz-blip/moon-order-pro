@@ -65,6 +65,9 @@ function Pedidos() {
   const { cliente } = Route.useSearch();
   const { data: orders, isLoading } = useOrders();
   const { data: profiles } = useProfiles();
+  const { data: pending } = usePendingOrders();
+  const pendingCount = pending?.length ?? 0;
+
   const invalidate = useInvalidate();
   const [view, setView] = useState<"kanban" | "lista">("kanban");
   const [q, setQ] = useState("");
