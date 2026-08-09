@@ -21,10 +21,16 @@ import { Route as AuthenticatedImportacionesRouteImport } from './routes/_authen
 import { Route as AuthenticatedNuevoPedidoRouteImport } from './routes/_authenticated/nuevo-pedido'
 import { Route as AuthenticatedPanelRouteImport } from './routes/_authenticated/panel'
 import { Route as AuthenticatedProductosRouteImport } from './routes/_authenticated/productos'
+import { Route as TiendaIndexRouteImport } from './routes/tienda.index'
+import { Route as TiendaAccesoRouteImport } from './routes/tienda.acceso'
+import { Route as TiendaCarritoRouteImport } from './routes/tienda.carrito'
+import { Route as TiendaPedidosRouteImport } from './routes/tienda.pedidos'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as AuthenticatedPedidosIndexRouteImport } from './routes/_authenticated/pedidos.index'
 import { Route as AuthenticatedPedidosOrderIdRouteImport } from './routes/_authenticated/pedidos.$orderId'
+import { Route as AuthenticatedPedidosPendientesRouteImport } from './routes/_authenticated/pedidos.pendientes'
+import { Route as TiendaListoFolioRouteImport } from './routes/tienda.listo.$folio'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -90,6 +96,26 @@ const AuthenticatedProductosRoute = AuthenticatedProductosRouteImport.update({
   path: '/productos',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const TiendaIndexRoute = TiendaIndexRouteImport.update({
+  id: '/tienda/',
+  path: '/tienda/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TiendaAccesoRoute = TiendaAccesoRouteImport.update({
+  id: '/tienda/acceso',
+  path: '/tienda/acceso',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TiendaCarritoRoute = TiendaCarritoRouteImport.update({
+  id: '/tienda/carrito',
+  path: '/tienda/carrito',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TiendaPedidosRoute = TiendaPedidosRouteImport.update({
+  id: '/tienda/pedidos',
+  path: '/tienda/pedidos',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
   id: '/.lovable/oauth/consent',
   path: '/.lovable/oauth/consent',
@@ -113,6 +139,17 @@ const AuthenticatedPedidosOrderIdRoute =
     path: '/pedidos/$orderId',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedPedidosPendientesRoute =
+  AuthenticatedPedidosPendientesRouteImport.update({
+    id: '/pedidos/pendientes',
+    path: '/pedidos/pendientes',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const TiendaListoFolioRoute = TiendaListoFolioRouteImport.update({
+  id: '/tienda/listo/$folio',
+  path: '/tienda/listo/$folio',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -126,9 +163,15 @@ export interface FileRoutesByFullPath {
   '/nuevo-pedido': typeof AuthenticatedNuevoPedidoRoute
   '/panel': typeof AuthenticatedPanelRoute
   '/productos': typeof AuthenticatedProductosRoute
+  '/tienda/acceso': typeof TiendaAccesoRoute
+  '/tienda/carrito': typeof TiendaCarritoRoute
+  '/tienda/pedidos': typeof TiendaPedidosRoute
+  '/tienda/': typeof TiendaIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/pedidos/$orderId': typeof AuthenticatedPedidosOrderIdRoute
+  '/pedidos/pendientes': typeof AuthenticatedPedidosPendientesRoute
+  '/tienda/listo/$folio': typeof TiendaListoFolioRoute
   '/pedidos/': typeof AuthenticatedPedidosIndexRoute
 }
 export interface FileRoutesByTo {
@@ -143,9 +186,15 @@ export interface FileRoutesByTo {
   '/nuevo-pedido': typeof AuthenticatedNuevoPedidoRoute
   '/panel': typeof AuthenticatedPanelRoute
   '/productos': typeof AuthenticatedProductosRoute
+  '/tienda/acceso': typeof TiendaAccesoRoute
+  '/tienda/carrito': typeof TiendaCarritoRoute
+  '/tienda/pedidos': typeof TiendaPedidosRoute
+  '/tienda': typeof TiendaIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/pedidos/$orderId': typeof AuthenticatedPedidosOrderIdRoute
+  '/pedidos/pendientes': typeof AuthenticatedPedidosPendientesRoute
+  '/tienda/listo/$folio': typeof TiendaListoFolioRoute
   '/pedidos': typeof AuthenticatedPedidosIndexRoute
 }
 export interface FileRoutesById {
@@ -162,9 +211,15 @@ export interface FileRoutesById {
   '/_authenticated/nuevo-pedido': typeof AuthenticatedNuevoPedidoRoute
   '/_authenticated/panel': typeof AuthenticatedPanelRoute
   '/_authenticated/productos': typeof AuthenticatedProductosRoute
+  '/tienda/acceso': typeof TiendaAccesoRoute
+  '/tienda/carrito': typeof TiendaCarritoRoute
+  '/tienda/pedidos': typeof TiendaPedidosRoute
+  '/tienda/': typeof TiendaIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/_authenticated/pedidos/$orderId': typeof AuthenticatedPedidosOrderIdRoute
+  '/_authenticated/pedidos/pendientes': typeof AuthenticatedPedidosPendientesRoute
+  '/tienda/listo/$folio': typeof TiendaListoFolioRoute
   '/_authenticated/pedidos/': typeof AuthenticatedPedidosIndexRoute
 }
 export interface FileRouteTypes {
@@ -181,9 +236,15 @@ export interface FileRouteTypes {
     | '/nuevo-pedido'
     | '/panel'
     | '/productos'
+    | '/tienda/acceso'
+    | '/tienda/carrito'
+    | '/tienda/pedidos'
+    | '/tienda/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/pedidos/$orderId'
+    | '/pedidos/pendientes'
+    | '/tienda/listo/$folio'
     | '/pedidos/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -198,9 +259,15 @@ export interface FileRouteTypes {
     | '/nuevo-pedido'
     | '/panel'
     | '/productos'
+    | '/tienda/acceso'
+    | '/tienda/carrito'
+    | '/tienda/pedidos'
+    | '/tienda'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/pedidos/$orderId'
+    | '/pedidos/pendientes'
+    | '/tienda/listo/$folio'
     | '/pedidos'
   id:
     | '__root__'
@@ -216,9 +283,15 @@ export interface FileRouteTypes {
     | '/_authenticated/nuevo-pedido'
     | '/_authenticated/panel'
     | '/_authenticated/productos'
+    | '/tienda/acceso'
+    | '/tienda/carrito'
+    | '/tienda/pedidos'
+    | '/tienda/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/_authenticated/pedidos/$orderId'
+    | '/_authenticated/pedidos/pendientes'
+    | '/tienda/listo/$folio'
     | '/_authenticated/pedidos/'
   fileRoutesById: FileRoutesById
 }
@@ -229,8 +302,13 @@ export interface RootRouteChildren {
   McpRoute: typeof McpRoute
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  TiendaAccesoRoute: typeof TiendaAccesoRoute
+  TiendaCarritoRoute: typeof TiendaCarritoRoute
+  TiendaPedidosRoute: typeof TiendaPedidosRoute
+  TiendaIndexRoute: typeof TiendaIndexRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
+  TiendaListoFolioRoute: typeof TiendaListoFolioRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -319,6 +397,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProductosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/tienda/': {
+      id: '/tienda/'
+      path: '/tienda'
+      fullPath: '/tienda/'
+      preLoaderRoute: typeof TiendaIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tienda/acceso': {
+      id: '/tienda/acceso'
+      path: '/tienda/acceso'
+      fullPath: '/tienda/acceso'
+      preLoaderRoute: typeof TiendaAccesoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tienda/carrito': {
+      id: '/tienda/carrito'
+      path: '/tienda/carrito'
+      fullPath: '/tienda/carrito'
+      preLoaderRoute: typeof TiendaCarritoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tienda/pedidos': {
+      id: '/tienda/pedidos'
+      path: '/tienda/pedidos'
+      fullPath: '/tienda/pedidos'
+      preLoaderRoute: typeof TiendaPedidosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/.lovable/oauth/consent': {
       id: '/.lovable/oauth/consent'
       path: '/.lovable/oauth/consent'
@@ -347,6 +453,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPedidosOrderIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/pedidos/pendientes': {
+      id: '/_authenticated/pedidos/pendientes'
+      path: '/pedidos/pendientes'
+      fullPath: '/pedidos/pendientes'
+      preLoaderRoute: typeof AuthenticatedPedidosPendientesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/tienda/listo/$folio': {
+      id: '/tienda/listo/$folio'
+      path: '/tienda/listo/$folio'
+      fullPath: '/tienda/listo/$folio'
+      preLoaderRoute: typeof TiendaListoFolioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -358,6 +478,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedPanelRoute: typeof AuthenticatedPanelRoute
   AuthenticatedProductosRoute: typeof AuthenticatedProductosRoute
   AuthenticatedPedidosOrderIdRoute: typeof AuthenticatedPedidosOrderIdRoute
+  AuthenticatedPedidosPendientesRoute: typeof AuthenticatedPedidosPendientesRoute
   AuthenticatedPedidosIndexRoute: typeof AuthenticatedPedidosIndexRoute
 }
 
@@ -369,6 +490,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPanelRoute: AuthenticatedPanelRoute,
   AuthenticatedProductosRoute: AuthenticatedProductosRoute,
   AuthenticatedPedidosOrderIdRoute: AuthenticatedPedidosOrderIdRoute,
+  AuthenticatedPedidosPendientesRoute: AuthenticatedPedidosPendientesRoute,
   AuthenticatedPedidosIndexRoute: AuthenticatedPedidosIndexRoute,
 }
 
@@ -383,8 +505,13 @@ const rootRouteChildren: RootRouteChildren = {
   Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
+  TiendaAccesoRoute: TiendaAccesoRoute,
+  TiendaCarritoRoute: TiendaCarritoRoute,
+  TiendaPedidosRoute: TiendaPedidosRoute,
+  TiendaIndexRoute: TiendaIndexRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
+  TiendaListoFolioRoute: TiendaListoFolioRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

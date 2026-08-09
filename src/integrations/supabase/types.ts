@@ -68,6 +68,24 @@ export type Database = {
           },
         ]
       }
+      app_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          value: string | null
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value?: string | null
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: string | null
+        }
+        Relationships: []
+      }
       customer_addresses: {
         Row: {
           city: string | null
@@ -138,6 +156,7 @@ export type Database = {
       }
       customers: {
         Row: {
+          auth_user_id: string | null
           contact_channel: string | null
           created_at: string
           created_by: string | null
@@ -147,9 +166,11 @@ export type Database = {
           last_name: string | null
           notes: string | null
           phone: string | null
+          phone_normalized: string | null
           updated_at: string
         }
         Insert: {
+          auth_user_id?: string | null
           contact_channel?: string | null
           created_at?: string
           created_by?: string | null
@@ -159,9 +180,11 @@ export type Database = {
           last_name?: string | null
           notes?: string | null
           phone?: string | null
+          phone_normalized?: string | null
           updated_at?: string
         }
         Update: {
+          auth_user_id?: string | null
           contact_channel?: string | null
           created_at?: string
           created_by?: string | null
@@ -171,6 +194,7 @@ export type Database = {
           last_name?: string | null
           notes?: string | null
           phone?: string | null
+          phone_normalized?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -442,6 +466,7 @@ export type Database = {
         Row: {
           assignee_id: string | null
           balance: number
+          client_notes: string | null
           created_at: string
           created_by: string | null
           customer_id: string | null
@@ -455,7 +480,9 @@ export type Database = {
           paid_amount: number
           payment_status: Database["public"]["Enums"]["payment_status"]
           priority: Database["public"]["Enums"]["order_priority"]
+          review_status: string
           shipping_cost: number
+          source: string
           status: Database["public"]["Enums"]["order_status"]
           subtotal: number
           total: number
@@ -464,6 +491,7 @@ export type Database = {
         Insert: {
           assignee_id?: string | null
           balance?: number
+          client_notes?: string | null
           created_at?: string
           created_by?: string | null
           customer_id?: string | null
@@ -477,7 +505,9 @@ export type Database = {
           paid_amount?: number
           payment_status?: Database["public"]["Enums"]["payment_status"]
           priority?: Database["public"]["Enums"]["order_priority"]
+          review_status?: string
           shipping_cost?: number
+          source?: string
           status?: Database["public"]["Enums"]["order_status"]
           subtotal?: number
           total?: number
@@ -486,6 +516,7 @@ export type Database = {
         Update: {
           assignee_id?: string | null
           balance?: number
+          client_notes?: string | null
           created_at?: string
           created_by?: string | null
           customer_id?: string | null
@@ -499,7 +530,9 @@ export type Database = {
           paid_amount?: number
           payment_status?: Database["public"]["Enums"]["payment_status"]
           priority?: Database["public"]["Enums"]["order_priority"]
+          review_status?: string
           shipping_cost?: number
+          source?: string
           status?: Database["public"]["Enums"]["order_status"]
           subtotal?: number
           total?: number
@@ -960,8 +993,11 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_client: { Args: never; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
+      my_customer_id: { Args: never; Returns: string }
       owns_order: { Args: { _order_id: string }; Returns: boolean }
+      place_client_order: { Args: { payload: Json }; Returns: string }
       purge_demo_data: { Args: never; Returns: undefined }
       recalc_order: { Args: { _order_id: string }; Returns: undefined }
       set_user_role: {

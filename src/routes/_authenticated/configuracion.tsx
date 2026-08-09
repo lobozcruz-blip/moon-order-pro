@@ -23,6 +23,8 @@ import { useAuth } from "@/lib/auth";
 import { logActivity } from "@/lib/storage";
 import { listUsers, createUser, updateUser } from "@/lib/users.functions";
 import { useActivity, useProfiles } from "@/lib/queries";
+import { useWhatsappNumber } from "@/lib/shop-queries";
+
 
 export const Route = createFileRoute("/_authenticated/configuracion")({
   head: () => ({
@@ -53,6 +55,9 @@ function Configuracion() {
           <TabsTrigger value="precios" className="flex-1">
             Precios
           </TabsTrigger>
+          <TabsTrigger value="tienda" className="flex-1">
+            Tienda
+          </TabsTrigger>
           <TabsTrigger value="usuarios" className="flex-1">
             Usuarios
           </TabsTrigger>
@@ -62,6 +67,9 @@ function Configuracion() {
         </TabsList>
         <TabsContent value="precios">
           <Precios />
+        </TabsContent>
+        <TabsContent value="tienda">
+          <TiendaConfig />
         </TabsContent>
         <TabsContent value="usuarios">
           <Usuarios />
@@ -73,6 +81,79 @@ function Configuracion() {
     </>
   );
 }
+
+function TiendaConfig() {
+  const { isAdmin } = useAuth();
+  const invalidate = useInvalidate();
+  const { data: current } = useWhatsappNumber();
+  const [phone, setPhone] = useState("");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => setPhone(current ?? ""), [current]);
+
+  const shopUrl = typeof window !== "undefined" ? `${window.location.origin}/tienda/acceso` : "";
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("app_settings")
+        .upsert({ key: "whatsapp_number", value: phone.trim() }, { onConflict: "key" });
+      if (error) throw error;
+      invalidate("setting");
+      toast.success("Número de WhatsApp guardado");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo guardar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="panel space-y-3 p-5">
+        <h2 className="font-display text-lg">Enlace para tus clientas</h2>
+        <p className="text-sm text-muted-foreground">
+          Compárteles esta liga: se registran con su nombre y celular, arman su carrito y te mandan
+          su número de pedido por WhatsApp.
+        </p>
+        <div className="flex gap-2">
+          <Input readOnly value={shopUrl} className="tap font-mono text-xs" />
+          <Button
+            variant="secondary"
+            className="tap"
+            onClick={() => {
+              navigator.clipboard.writeText(shopUrl);
+              toast.success("Enlace copiado");
+            }}
+          >
+            Copiar
+          </Button>
+        </div>
+      </div>
+
+      <div className="panel space-y-3 p-5">
+        <h2 className="font-display text-lg">WhatsApp del negocio</h2>
+        <div className="space-y-2">
+          <Label htmlFor="wa">Número (10 dígitos o con lada país)</Label>
+          <Input
+            id="wa"
+            className="tap"
+            inputMode="numeric"
+            placeholder="55 1234 5678"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            disabled={!isAdmin}
+          />
+        </div>
+        <Button className="tap font-semibold" onClick={save} disabled={!isAdmin || saving}>
+          {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+          Guardar
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 
 function Precios() {
   const { data: rules } = usePriceRules();

@@ -9,7 +9,7 @@ import {
   useDroppable,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { LayoutGrid, List, Search, Plus, GripVertical } from "lucide-react";
+import { LayoutGrid, List, Search, Plus, GripVertical, Inbox } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,8 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrders, useInvalidate, useProfiles } from "@/lib/queries";
+import { usePendingOrders } from "@/lib/shop-queries";
+
 import {
   KANBAN_STATUSES,
   ORDER_STATUSES,
@@ -65,6 +67,9 @@ function Pedidos() {
   const { cliente } = Route.useSearch();
   const { data: orders, isLoading } = useOrders();
   const { data: profiles } = useProfiles();
+  const { data: pending } = usePendingOrders();
+  const pendingCount = pending?.length ?? 0;
+
   const invalidate = useInvalidate();
   const [view, setView] = useState<"kanban" | "lista">("kanban");
   const [q, setQ] = useState("");
@@ -119,7 +124,19 @@ function Pedidos() {
         subtitle={`${rows.length} pedidos`}
         action={
           <div className="flex gap-2">
+            <Button asChild variant="secondary" className="tap relative">
+              <Link to="/pedidos/pendientes">
+                <Inbox className="h-4 w-4" />
+                <span className="ml-1 hidden sm:inline">Tienda</span>
+                {pendingCount > 0 && (
+                  <span className="ml-1 rounded-full bg-primary px-1.5 text-[11px] font-bold text-primary-foreground">
+                    {pendingCount}
+                  </span>
+                )}
+              </Link>
+            </Button>
             <Button
+
               variant="secondary"
               className="tap"
               onClick={() => setView(view === "kanban" ? "lista" : "kanban")}
