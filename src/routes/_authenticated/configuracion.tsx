@@ -23,6 +23,8 @@ import { useAuth } from "@/lib/auth";
 import { logActivity } from "@/lib/storage";
 import { listUsers, createUser, updateUser } from "@/lib/users.functions";
 import { useActivity, useProfiles } from "@/lib/queries";
+import { useWhatsappNumber } from "@/lib/shop-queries";
+
 
 export const Route = createFileRoute("/_authenticated/configuracion")({
   head: () => ({
