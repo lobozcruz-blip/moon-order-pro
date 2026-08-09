@@ -119,7 +119,19 @@ function Pedidos() {
         subtitle={`${rows.length} pedidos`}
         action={
           <div className="flex gap-2">
+            <Button asChild variant="secondary" className="tap relative">
+              <Link to="/pedidos/pendientes">
+                <Inbox className="h-4 w-4" />
+                <span className="ml-1 hidden sm:inline">Tienda</span>
+                {pendingCount > 0 && (
+                  <span className="ml-1 rounded-full bg-primary px-1.5 text-[11px] font-bold text-primary-foreground">
+                    {pendingCount}
+                  </span>
+                )}
+              </Link>
+            </Button>
             <Button
+
               variant="secondary"
               className="tap"
               onClick={() => setView(view === "kanban" ? "lista" : "kanban")}
