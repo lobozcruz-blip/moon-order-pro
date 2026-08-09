@@ -24,6 +24,7 @@ import { Route as AuthenticatedProductosRouteImport } from './routes/_authentica
 import { Route as TiendaIndexRouteImport } from './routes/tienda.index'
 import { Route as TiendaAccesoRouteImport } from './routes/tienda.acceso'
 import { Route as TiendaCarritoRouteImport } from './routes/tienda.carrito'
+import { Route as TiendaPedidosRouteImport } from './routes/tienda.pedidos'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as AuthenticatedPedidosIndexRouteImport } from './routes/_authenticated/pedidos.index'
@@ -109,6 +110,11 @@ const TiendaCarritoRoute = TiendaCarritoRouteImport.update({
   path: '/tienda/carrito',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TiendaPedidosRoute = TiendaPedidosRouteImport.update({
+  id: '/tienda/pedidos',
+  path: '/tienda/pedidos',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
   id: '/.lovable/oauth/consent',
   path: '/.lovable/oauth/consent',
@@ -152,6 +158,7 @@ export interface FileRoutesByFullPath {
   '/productos': typeof AuthenticatedProductosRoute
   '/tienda/acceso': typeof TiendaAccesoRoute
   '/tienda/carrito': typeof TiendaCarritoRoute
+  '/tienda/pedidos': typeof TiendaPedidosRoute
   '/tienda/': typeof TiendaIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
@@ -173,6 +180,7 @@ export interface FileRoutesByTo {
   '/productos': typeof AuthenticatedProductosRoute
   '/tienda/acceso': typeof TiendaAccesoRoute
   '/tienda/carrito': typeof TiendaCarritoRoute
+  '/tienda/pedidos': typeof TiendaPedidosRoute
   '/tienda': typeof TiendaIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
@@ -196,6 +204,7 @@ export interface FileRoutesById {
   '/_authenticated/productos': typeof AuthenticatedProductosRoute
   '/tienda/acceso': typeof TiendaAccesoRoute
   '/tienda/carrito': typeof TiendaCarritoRoute
+  '/tienda/pedidos': typeof TiendaPedidosRoute
   '/tienda/': typeof TiendaIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
@@ -219,6 +228,7 @@ export interface FileRouteTypes {
     | '/productos'
     | '/tienda/acceso'
     | '/tienda/carrito'
+    | '/tienda/pedidos'
     | '/tienda/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
@@ -240,6 +250,7 @@ export interface FileRouteTypes {
     | '/productos'
     | '/tienda/acceso'
     | '/tienda/carrito'
+    | '/tienda/pedidos'
     | '/tienda'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
@@ -262,6 +273,7 @@ export interface FileRouteTypes {
     | '/_authenticated/productos'
     | '/tienda/acceso'
     | '/tienda/carrito'
+    | '/tienda/pedidos'
     | '/tienda/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
@@ -279,6 +291,7 @@ export interface RootRouteChildren {
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   TiendaAccesoRoute: typeof TiendaAccesoRoute
   TiendaCarritoRoute: typeof TiendaCarritoRoute
+  TiendaPedidosRoute: typeof TiendaPedidosRoute
   TiendaIndexRoute: typeof TiendaIndexRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
@@ -392,6 +405,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TiendaCarritoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tienda/pedidos': {
+      id: '/tienda/pedidos'
+      path: '/tienda/pedidos'
+      fullPath: '/tienda/pedidos'
+      preLoaderRoute: typeof TiendaPedidosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/.lovable/oauth/consent': {
       id: '/.lovable/oauth/consent'
       path: '/.lovable/oauth/consent'
@@ -465,6 +485,7 @@ const rootRouteChildren: RootRouteChildren = {
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
   TiendaAccesoRoute: TiendaAccesoRoute,
   TiendaCarritoRoute: TiendaCarritoRoute,
+  TiendaPedidosRoute: TiendaPedidosRoute,
   TiendaIndexRoute: TiendaIndexRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
