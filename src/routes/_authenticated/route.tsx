@@ -9,8 +9,10 @@ export const Route = createFileRoute("/_authenticated")({
     const { data } = await supabase.auth.getSession();
     const user = data.session?.user;
     if (!user) throw redirect({ to: "/auth" });
+    if (isClientEmail(user.email)) throw redirect({ to: "/tienda" });
     return { user };
   },
+
 
   component: () => (
     <AppShell>
