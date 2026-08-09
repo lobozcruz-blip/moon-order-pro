@@ -9,7 +9,7 @@ import {
   useDroppable,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { LayoutGrid, List, Search, Plus, GripVertical } from "lucide-react";
+import { LayoutGrid, List, Search, Plus, GripVertical, Inbox } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
