@@ -21,6 +21,7 @@ import { Route as AuthenticatedImportacionesRouteImport } from './routes/_authen
 import { Route as AuthenticatedNuevoPedidoRouteImport } from './routes/_authenticated/nuevo-pedido'
 import { Route as AuthenticatedPanelRouteImport } from './routes/_authenticated/panel'
 import { Route as AuthenticatedProductosRouteImport } from './routes/_authenticated/productos'
+import { Route as TiendaAccesoRouteImport } from './routes/tienda.acceso'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as AuthenticatedPedidosIndexRouteImport } from './routes/_authenticated/pedidos.index'
@@ -90,6 +91,11 @@ const AuthenticatedProductosRoute = AuthenticatedProductosRouteImport.update({
   path: '/productos',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const TiendaAccesoRoute = TiendaAccesoRouteImport.update({
+  id: '/tienda/acceso',
+  path: '/tienda/acceso',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
   id: '/.lovable/oauth/consent',
   path: '/.lovable/oauth/consent',
@@ -126,6 +132,7 @@ export interface FileRoutesByFullPath {
   '/nuevo-pedido': typeof AuthenticatedNuevoPedidoRoute
   '/panel': typeof AuthenticatedPanelRoute
   '/productos': typeof AuthenticatedProductosRoute
+  '/tienda/acceso': typeof TiendaAccesoRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/pedidos/$orderId': typeof AuthenticatedPedidosOrderIdRoute
@@ -143,6 +150,7 @@ export interface FileRoutesByTo {
   '/nuevo-pedido': typeof AuthenticatedNuevoPedidoRoute
   '/panel': typeof AuthenticatedPanelRoute
   '/productos': typeof AuthenticatedProductosRoute
+  '/tienda/acceso': typeof TiendaAccesoRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/pedidos/$orderId': typeof AuthenticatedPedidosOrderIdRoute
@@ -162,6 +170,7 @@ export interface FileRoutesById {
   '/_authenticated/nuevo-pedido': typeof AuthenticatedNuevoPedidoRoute
   '/_authenticated/panel': typeof AuthenticatedPanelRoute
   '/_authenticated/productos': typeof AuthenticatedProductosRoute
+  '/tienda/acceso': typeof TiendaAccesoRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/_authenticated/pedidos/$orderId': typeof AuthenticatedPedidosOrderIdRoute
@@ -181,6 +190,7 @@ export interface FileRouteTypes {
     | '/nuevo-pedido'
     | '/panel'
     | '/productos'
+    | '/tienda/acceso'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/pedidos/$orderId'
@@ -198,6 +208,7 @@ export interface FileRouteTypes {
     | '/nuevo-pedido'
     | '/panel'
     | '/productos'
+    | '/tienda/acceso'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/pedidos/$orderId'
@@ -216,6 +227,7 @@ export interface FileRouteTypes {
     | '/_authenticated/nuevo-pedido'
     | '/_authenticated/panel'
     | '/_authenticated/productos'
+    | '/tienda/acceso'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/_authenticated/pedidos/$orderId'
@@ -229,6 +241,7 @@ export interface RootRouteChildren {
   McpRoute: typeof McpRoute
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  TiendaAccesoRoute: typeof TiendaAccesoRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
 }
@@ -319,6 +332,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProductosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/tienda/acceso': {
+      id: '/tienda/acceso'
+      path: '/tienda/acceso'
+      fullPath: '/tienda/acceso'
+      preLoaderRoute: typeof TiendaAccesoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/.lovable/oauth/consent': {
       id: '/.lovable/oauth/consent'
       path: '/.lovable/oauth/consent'
@@ -383,6 +403,7 @@ const rootRouteChildren: RootRouteChildren = {
   Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
+  TiendaAccesoRoute: TiendaAccesoRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
 }
