@@ -70,13 +70,14 @@ function CarritoPage() {
     try {
       const payload = {
         delivery_type: tipo,
-        client_notes: f.notes || null,
+        notes: f.notes || null,
         items: items.map((l) => ({
           product_id: l.product_id,
           quantity: l.quantity,
-          cutter_modality: l.modality,
-          cutter_size_cm: l.size_cm,
+          modality: l.modality,
+          size_cm: l.size_cm,
         })),
+
         shipping:
           tipo === "envio"
             ? {
