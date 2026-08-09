@@ -29,6 +29,7 @@ import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as AuthenticatedPedidosIndexRouteImport } from './routes/_authenticated/pedidos.index'
 import { Route as AuthenticatedPedidosOrderIdRouteImport } from './routes/_authenticated/pedidos.$orderId'
+import { Route as AuthenticatedPedidosPendientesRouteImport } from './routes/_authenticated/pedidos.pendientes'
 import { Route as TiendaListoFolioRouteImport } from './routes/tienda.listo.$folio'
 
 const IndexRoute = IndexRouteImport.update({
@@ -138,6 +139,12 @@ const AuthenticatedPedidosOrderIdRoute =
     path: '/pedidos/$orderId',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedPedidosPendientesRoute =
+  AuthenticatedPedidosPendientesRouteImport.update({
+    id: '/pedidos/pendientes',
+    path: '/pedidos/pendientes',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const TiendaListoFolioRoute = TiendaListoFolioRouteImport.update({
   id: '/tienda/listo/$folio',
   path: '/tienda/listo/$folio',
@@ -163,6 +170,7 @@ export interface FileRoutesByFullPath {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/pedidos/$orderId': typeof AuthenticatedPedidosOrderIdRoute
+  '/pedidos/pendientes': typeof AuthenticatedPedidosPendientesRoute
   '/tienda/listo/$folio': typeof TiendaListoFolioRoute
   '/pedidos/': typeof AuthenticatedPedidosIndexRoute
 }
@@ -185,6 +193,7 @@ export interface FileRoutesByTo {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/pedidos/$orderId': typeof AuthenticatedPedidosOrderIdRoute
+  '/pedidos/pendientes': typeof AuthenticatedPedidosPendientesRoute
   '/tienda/listo/$folio': typeof TiendaListoFolioRoute
   '/pedidos': typeof AuthenticatedPedidosIndexRoute
 }
@@ -209,6 +218,7 @@ export interface FileRoutesById {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/_authenticated/pedidos/$orderId': typeof AuthenticatedPedidosOrderIdRoute
+  '/_authenticated/pedidos/pendientes': typeof AuthenticatedPedidosPendientesRoute
   '/tienda/listo/$folio': typeof TiendaListoFolioRoute
   '/_authenticated/pedidos/': typeof AuthenticatedPedidosIndexRoute
 }
@@ -233,6 +243,7 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/pedidos/$orderId'
+    | '/pedidos/pendientes'
     | '/tienda/listo/$folio'
     | '/pedidos/'
   fileRoutesByTo: FileRoutesByTo
@@ -255,6 +266,7 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/pedidos/$orderId'
+    | '/pedidos/pendientes'
     | '/tienda/listo/$folio'
     | '/pedidos'
   id:
@@ -278,6 +290,7 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/_authenticated/pedidos/$orderId'
+    | '/_authenticated/pedidos/pendientes'
     | '/tienda/listo/$folio'
     | '/_authenticated/pedidos/'
   fileRoutesById: FileRoutesById
@@ -440,6 +453,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPedidosOrderIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/pedidos/pendientes': {
+      id: '/_authenticated/pedidos/pendientes'
+      path: '/pedidos/pendientes'
+      fullPath: '/pedidos/pendientes'
+      preLoaderRoute: typeof AuthenticatedPedidosPendientesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/tienda/listo/$folio': {
       id: '/tienda/listo/$folio'
       path: '/tienda/listo/$folio'
@@ -458,6 +478,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedPanelRoute: typeof AuthenticatedPanelRoute
   AuthenticatedProductosRoute: typeof AuthenticatedProductosRoute
   AuthenticatedPedidosOrderIdRoute: typeof AuthenticatedPedidosOrderIdRoute
+  AuthenticatedPedidosPendientesRoute: typeof AuthenticatedPedidosPendientesRoute
   AuthenticatedPedidosIndexRoute: typeof AuthenticatedPedidosIndexRoute
 }
 
@@ -469,6 +490,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPanelRoute: AuthenticatedPanelRoute,
   AuthenticatedProductosRoute: AuthenticatedProductosRoute,
   AuthenticatedPedidosOrderIdRoute: AuthenticatedPedidosOrderIdRoute,
+  AuthenticatedPedidosPendientesRoute: AuthenticatedPedidosPendientesRoute,
   AuthenticatedPedidosIndexRoute: AuthenticatedPedidosIndexRoute,
 }
 
