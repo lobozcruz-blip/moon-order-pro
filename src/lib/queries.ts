@@ -2,6 +2,76 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Category, Modality } from "./cm";
 
+export type ProductTheme = {
+  id: string;
+  name: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProductThemeLink = {
+  theme_id: string;
+  product_themes: {
+    id: string;
+    name: string;
+    active: boolean;
+  };
+};
+
+export function useProductThemes(includeInactive = false) {
+  return useQuery({
+    queryKey: ["product-themes", includeInactive],
+    queryFn: async () => {
+      let q = supabase.from("product_themes").select("*").order("name");
+      if (!includeInactive) q = q.eq("active", true);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as ProductTheme[];
+    },
+    staleTime: 120_000,
+  });
+}
+
+export async function saveProductThemeLinks(productId: string, themeIds: string[]) {
+  // Eliminar vínculos anteriores
+  await supabase.from("product_theme_links").delete().eq("product_id", productId);
+  if (themeIds.length === 0) return;
+
+  const rows = themeIds.map((theme_id) => ({
+    product_id: productId,
+    theme_id,
+  }));
+  const { error } = await supabase.from("product_theme_links").insert(rows);
+  if (error) throw error;
+}
+
+export async function createProductTheme(name: string) {
+  const { data, error } = await supabase
+    .from("product_themes")
+    .insert({ name: name.trim(), active: true })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as ProductTheme;
+}
+
+export async function updateProductTheme(id: string, patch: { name?: string; active?: boolean }) {
+  const { data, error } = await supabase
+    .from("product_themes")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as ProductTheme;
+}
+
+export async function deleteProductTheme(id: string) {
+  const { error } = await supabase.from("product_themes").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export function useProducts(includeInactive = true) {
   return useQuery({
     queryKey: ["products", includeInactive],
@@ -9,7 +79,7 @@ export function useProducts(includeInactive = true) {
       let q = supabase
         .from("products")
         .select(
-          "*, product_images(id, storage_path, external_url, is_primary, sort_order, kind)",
+          "*, product_images(id, storage_path, external_url, is_primary, sort_order, kind), product_theme_links(theme_id, product_themes(id, name, active))",
         )
         .order("created_at", { ascending: false });
       if (!includeInactive) q = q.eq("active", true);
@@ -49,7 +119,6 @@ export function useCustomers() {
     staleTime: 120_000,
   });
 }
-
 
 export function usePriceRules() {
   return useQuery({
@@ -103,33 +172,22 @@ export function useOrder(id: string) {
       const { data, error } = await supabase
         .from("orders")
         .select(
-          "*, customers(*), order_items(*, order_item_images(*), products(id, sku, product_images(id, storage_path, external_url, is_primary))), order_notes(*, note_attachments(*)), payments(*, payment_attachments(*)), shipping_details(*), personal_delivery_details(*)",
+          `
+          *,
+          customers(*, customer_addresses(*)),
+          order_items(*, order_item_images(*)),
+          shipping_details(*),
+          personal_delivery_details(*),
+          payments(*, payment_attachments(*)),
+          order_notes(*, note_attachments(*))
+        `,
         )
         .eq("id", id)
-        .maybeSingle();
+        .single();
       if (error) throw error;
       return data;
     },
-    enabled: !!id,
-    staleTime: 15_000,
-  });
-}
-
-export function useActivity(orderId?: string) {
-  return useQuery({
-    queryKey: ["activity", orderId ?? "all"],
-    queryFn: async () => {
-      let q = supabase
-        .from("activity_log")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(orderId ? 200 : 60);
-      if (orderId) q = q.eq("order_id", orderId);
-      const { data, error } = await q;
-      if (error) throw error;
-      return data ?? [];
-    },
-    staleTime: 30_000,
+    staleTime: 5_000,
   });
 }
 
@@ -146,7 +204,22 @@ export function useProfiles() {
     },
     staleTime: 300_000,
   });
+}
 
+export function useActivity() {
+  return useQuery({
+    queryKey: ["activity"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("activity_log")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(30);
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 15_000,
+  });
 }
 
 export function useInvalidate() {

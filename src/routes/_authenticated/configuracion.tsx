@@ -825,17 +825,19 @@ function DemoData() {
 
 function Usuarios() {
   const { isAdmin } = useAuth();
-  const users = useQuery({ queryKey: ["users"], queryFn: () => listUsers(), enabled: isAdmin });
+  const usersQuery = useQuery({ queryKey: ["users"], queryFn: () => listUsers(), enabled: isAdmin });
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"admin" | "colaborador">("colaborador");
   const [busy, setBusy] = useState(false);
+  const [filter, setFilter] = useState<"trabajadores" | "admin" | "colaborador" | "clientes" | "todos">("trabajadores");
+  const [search, setSearch] = useState("");
 
   if (!isAdmin)
     return (
       <div className="panel p-6 text-center text-sm text-muted-foreground">
-        Sólo los administradores pueden gestionar usuarios.
+        Sólo los administradores pueden gestionar usuarios y trabajadores.
       </div>
     );
 
@@ -843,11 +845,11 @@ function Usuarios() {
     setBusy(true);
     try {
       await createUser({ data: { email, password, fullName: name, role } });
-      toast.success("Usuario creado");
+      toast.success("Trabajador creado exitosamente");
       setEmail("");
       setName("");
       setPassword("");
-      users.refetch();
+      usersQuery.refetch();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo crear");
     } finally {
@@ -855,79 +857,216 @@ function Usuarios() {
     }
   };
 
+  const data = usersQuery.data;
+  const workers = data?.workers ?? [];
+  const clients = data?.clients ?? [];
+
+  const filteredList = (() => {
+    let list = data?.all ?? [];
+    if (filter === "trabajadores") list = workers;
+    else if (filter === "admin") list = workers.filter((w) => w.role === "admin");
+    else if (filter === "colaborador") list = workers.filter((w) => w.role === "colaborador");
+    else if (filter === "clientes") list = clients;
+
+    const term = search.trim().toLowerCase();
+    if (!term) return list;
+    return list.filter(
+      (u) =>
+        (u.full_name ?? "").toLowerCase().includes(term) ||
+        u.email.toLowerCase().includes(term) ||
+        (u.phone ?? "").includes(term),
+    );
+  })();
+
   return (
-    <div className="space-y-4">
-      <div className="panel p-4">
-        <h2 className="mb-3 font-display text-lg">Nuevo usuario autorizado</h2>
+    <div className="space-y-6">
+      {/* 1. Nuevo Trabajador */}
+      <div className="panel p-5">
+        <h2 className="mb-1 font-display text-lg">Nuevo trabajador autorizado</h2>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Los trabajadores tienen acceso a la app interna del taller según su rol asignado.
+        </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label>Nombre completo</Label>
+            <Label>Nombre completo *</Label>
             <Input className="tap" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label>Correo</Label>
+            <Label>Correo electrónico *</Label>
             <Input className="tap" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label>Contraseña temporal (8+)</Label>
+            <Label>Contraseña temporal (8+ caracteres) *</Label>
             <Input className="tap" value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label>Rol</Label>
+            <Label>Rol del trabajador</Label>
             <Select value={role} onValueChange={(v) => setRole(v as "admin" | "colaborador")}>
               <SelectTrigger className="tap">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="colaborador">Colaborador</SelectItem>
-                <SelectItem value="admin">Administrador</SelectItem>
+                <SelectItem value="colaborador">Colaborador (producción y pedidos)</SelectItem>
+                <SelectItem value="admin">Administrador (acceso total)</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
         <Button onClick={add} disabled={busy} className="tap mt-4 font-semibold">
-          <UserPlus className="mr-2 h-4 w-4" /> Crear usuario
+          <UserPlus className="mr-2 h-4 w-4" /> Crear trabajador
         </Button>
       </div>
 
-      <div className="panel p-4">
-        <h2 className="mb-3 font-display text-lg">Usuarios</h2>
+      {/* 2. Directorio de Usuarios */}
+      <div className="panel p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-display text-lg">Directorio de usuarios</h2>
+            <p className="text-xs text-muted-foreground">
+              {workers.length} trabajadores registrados · {clients.length} clientes en base de datos
+            </p>
+          </div>
+          <Input
+            placeholder="Buscar por nombre, correo o celular..."
+            className="tap w-full sm:w-72"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        {/* Filtros de grupo */}
+        <div className="mb-4 flex flex-wrap gap-2">
+          <button
+            onClick={() => setFilter("trabajadores")}
+            className={`chip border border-border ${
+              filter === "trabajadores"
+                ? "bg-primary text-primary-foreground font-bold"
+                : "text-muted-foreground"
+            }`}
+          >
+            Trabajadores ({workers.length})
+          </button>
+          <button
+            onClick={() => setFilter("admin")}
+            className={`chip border border-border ${
+              filter === "admin"
+                ? "bg-primary text-primary-foreground font-bold"
+                : "text-muted-foreground"
+            }`}
+          >
+            Admins ({workers.filter((w) => w.role === "admin").length})
+          </button>
+          <button
+            onClick={() => setFilter("colaborador")}
+            className={`chip border border-border ${
+              filter === "colaborador"
+                ? "bg-primary text-primary-foreground font-bold"
+                : "text-muted-foreground"
+            }`}
+          >
+            Colaboradores ({workers.filter((w) => w.role === "colaborador").length})
+          </button>
+          <button
+            onClick={() => setFilter("clientes")}
+            className={`chip border border-border ${
+              filter === "clientes"
+                ? "bg-primary text-primary-foreground font-bold"
+                : "text-muted-foreground"
+            }`}
+          >
+            Clientes ({clients.length})
+          </button>
+          <button
+            onClick={() => setFilter("todos")}
+            className={`chip border border-border ${
+              filter === "todos"
+                ? "bg-primary text-primary-foreground font-bold"
+                : "text-muted-foreground"
+            }`}
+          >
+            Todos ({data?.all?.length ?? 0})
+          </button>
+        </div>
+
         <div className="space-y-2">
-          {(users.data ?? []).map((u) => (
-            <div key={u.id} className="flex flex-wrap items-center gap-3 rounded-lg bg-secondary p-3">
+          {filteredList.map((u) => (
+            <div
+              key={`${u.user_type}-${u.id}`}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-secondary p-3.5"
+            >
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{u.full_name ?? u.email}</p>
-                <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+                <div className="flex items-center gap-2">
+                  <p className="truncate text-sm font-semibold">{u.full_name || u.email}</p>
+                  {u.user_type === "trabajador" ? (
+                    <span
+                      className={`chip text-[10px] ${
+                        u.role === "admin"
+                          ? "bg-primary/20 text-primary font-bold"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {u.role === "admin" ? "ADMIN" : "COLABORADOR"}
+                    </span>
+                  ) : (
+                    <span
+                      className={`chip text-[10px] ${
+                        u.has_account
+                          ? "bg-emerald-500/20 text-emerald-400 font-semibold"
+                          : "bg-amber-500/20 text-amber-400 font-semibold"
+                      }`}
+                    >
+                      {u.has_account ? "CLIENTE CON CUENTA" : "CLIENTE SIN CUENTA"}
+                    </span>
+                  )}
+                </div>
+                <p className="truncate text-xs text-muted-foreground">
+                  {u.user_type === "trabajador" ? u.email : `Celular: ${u.phone ?? "—"}`}
+                </p>
               </div>
-              <Select
-                value={u.role}
-                onValueChange={async (v) => {
-                  await updateUser({ data: { userId: u.id, role: v as "admin" | "colaborador" } });
-                  toast.success("Rol actualizado");
-                  users.refetch();
-                }}
-              >
-                <SelectTrigger className="tap w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="colaborador">Colaborador</SelectItem>
-                  <SelectItem value="admin">Administrador</SelectItem>
-                </SelectContent>
-              </Select>
-              <label className="flex items-center gap-2 text-xs">
-                Activo
-                <Switch
-                  checked={u.active}
-                  onCheckedChange={async (v) => {
-                    await updateUser({ data: { userId: u.id, active: v } });
-                    users.refetch();
-                  }}
-                />
-              </label>
+
+              {u.user_type === "trabajador" ? (
+                <div className="flex items-center gap-3">
+                  <Select
+                    value={u.role}
+                    onValueChange={async (v) => {
+                      await updateUser({ data: { userId: u.id, role: v as "admin" | "colaborador" } });
+                      toast.success("Rol de trabajador actualizado");
+                      usersQuery.refetch();
+                    }}
+                  >
+                    <SelectTrigger className="tap w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="colaborador">Colaborador</SelectItem>
+                      <SelectItem value="admin">Administrador</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    Activo
+                    <Switch
+                      checked={u.active}
+                      onCheckedChange={async (v) => {
+                        await updateUser({ data: { userId: u.id, active: v } });
+                        usersQuery.refetch();
+                      }}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  {u.has_account ? "Acceso al catálogo activado" : "Pendiente de crear contraseña"}
+                </span>
+              )}
             </div>
           ))}
-          {users.isLoading && <Loader2 className="mx-auto h-5 w-5 animate-spin" />}
+
+          {filteredList.length === 0 && !usersQuery.isLoading && (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No se encontraron usuarios en esta categoría.
+            </p>
+          )}
+          {usersQuery.isLoading && <Loader2 className="mx-auto my-6 h-5 w-5 animate-spin text-primary" />}
         </div>
       </div>
     </div>

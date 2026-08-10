@@ -22,7 +22,9 @@ import {
   priceFor,
   useInvalidate,
   useProfiles,
+  useProductThemes,
 } from "@/lib/queries";
+import { ProductPicker } from "@/components/ProductPicker";
 import {
   CATEGORIES,
   CATEGORY_META,
@@ -94,6 +96,7 @@ function NuevoPedido() {
   const { data: products } = useProducts(false);
   const { data: rules } = usePriceRules();
   const { data: profiles } = useProfiles();
+  const { data: themes } = useProductThemes();
   const invalidate = useInvalidate();
 
   const [customerId, setCustomerId] = useState<string>("");
@@ -389,63 +392,46 @@ function NuevoPedido() {
                       )}
                     </div>
 
-                    <div className="mb-3 flex flex-wrap gap-2">
-                      {CATEGORIES.map((c) => (
-                        <button
-                          key={c}
-                          onClick={() =>
-                            setItem(it.key, {
-                              category: c,
-                              product_id: null,
-                              product_name: "",
-                              product_sku: null,
-                              unit_price: 0,
-                              price_overridden: false,
-                            })
+                    {/* Selector de producto con buscador universal y temáticas */}
+                    <div className="mb-3 space-y-2">
+                      <Label className="text-xs font-semibold">
+                        Buscar y seleccionar producto del catálogo (SKU, nombre, categoría o temática)
+                      </Label>
+                      <ProductPicker
+                        products={products ?? []}
+                        themes={themes ?? []}
+                        categoryFilter={it.category}
+                        onCategoryFilterChange={(c) => {
+                          if (c !== "TODAS") {
+                            setItem(it.key, { category: c });
                           }
-                          className={cn(
-                            "chip border border-border",
-                            it.category === c
-                              ? "bg-primary text-primary-foreground"
-                              : "text-muted-foreground",
-                          )}
-                        >
-                          {CATEGORY_META[c].label}
-                        </button>
-                      ))}
+                        }}
+                        selectedProductId={it.product_id}
+                        onSelect={(p) => {
+                          if (!p) {
+                            setItem(it.key, { product_id: null, product_sku: null });
+                            return;
+                          }
+                          setItem(it.key, {
+                            product_id: p.id,
+                            product_name: p.name ?? "",
+                            product_sku: p.sku ?? null,
+                            category: p.category,
+                            unit_price: Number(p.base_price ?? 0),
+                            price_overridden: false,
+                          });
+                        }}
+                      />
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="space-y-2 sm:col-span-2">
-                        <Label>Producto del catálogo</Label>
-                        <Select
-                          value={it.product_id ?? "manual"}
-                          onValueChange={(v) => {
-                            if (v === "manual") {
-                              setItem(it.key, { product_id: null, product_sku: null });
-                              return;
-                            }
-                            const p = catProducts.find((x) => x.id === v);
-                            setItem(it.key, {
-                              product_id: v,
-                              product_name: p?.name ?? "",
-                              product_sku: p?.sku ?? null,
-                              unit_price: Number(p?.base_price ?? 0),
-                            });
-                          }}
-                        >
-                          <SelectTrigger className="tap">
-                            <SelectValue placeholder="Elegir producto" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="manual">Artículo manual (sin catálogo)</SelectItem>
-                            {catProducts.map((p) => (
-                              <SelectItem key={p.id} value={p.id}>
-                                {p.sku} · {p.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <Label>Nombre del artículo *</Label>
+                        <Input
+                          className="tap"
+                          value={it.product_name}
+                          onChange={(e) => setItem(it.key, { product_name: e.target.value })}
+                        />
                       </div>
 
                       <div className="space-y-2 sm:col-span-2">

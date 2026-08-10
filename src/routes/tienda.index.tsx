@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Search, Plus, ShoppingBag } from "lucide-react";
+import { Search, Plus, ShoppingBag, Tag, X } from "lucide-react";
 import { toast } from "sonner";
 import { ShopShell } from "@/components/shop/ShopShell";
 import { StoredImage } from "@/components/StoredImage";
@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { requireClientSession } from "@/lib/client-gate";
 import { useShopCatalog } from "@/lib/shop-queries";
-import { usePriceRules, priceFor } from "@/lib/queries";
+import { usePriceRules, priceFor, useProductThemes } from "@/lib/queries";
 import { cart } from "@/lib/cart";
 import { CATEGORIES, CATEGORY_META, MODALITIES, SIZES, money, type Category, type Modality } from "@/lib/cm";
 
@@ -46,17 +46,28 @@ type Producto = NonNullable<ReturnType<typeof useShopCatalog>["data"]>[number];
 function Catalogo() {
   const { data: products, isLoading } = useShopCatalog();
   const { data: rules } = usePriceRules();
+  const { data: themes = [] } = useProductThemes();
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<Category | "todas">("todas");
+  const [themeFilter, setThemeFilter] = useState<string>("todas");
 
   const rows = useMemo(() => {
     const t = q.trim().toLowerCase();
-    return (products ?? []).filter(
-      (p) =>
-        (cat === "todas" || p.category === cat) &&
-        (!t || p.name.toLowerCase().includes(t) || p.sku.toLowerCase().includes(t)),
-    );
-  }, [products, q, cat]);
+    return (products ?? []).filter((p) => {
+      if (cat !== "todas" && p.category !== cat) return false;
+      if (themeFilter !== "todas") {
+        const hasTheme = (p.product_theme_links ?? []).some((tl: any) => tl.theme_id === themeFilter);
+        if (!hasTheme) return false;
+      }
+      if (!t) return true;
+      const matchSku = (p.sku ?? "").toLowerCase().includes(t);
+      const matchName = (p.name ?? "").toLowerCase().includes(t);
+      const matchTheme = (p.product_theme_links ?? []).some((tl: any) =>
+        (tl.product_themes?.name ?? "").toLowerCase().includes(t),
+      );
+      return matchSku || matchName || matchTheme;
+    });
+  }, [products, q, cat, themeFilter]);
 
   return (
     <ShopShell>
@@ -65,19 +76,22 @@ function Catalogo() {
         Agrega lo que necesites al carrito y al final te damos tu número de pedido.
       </p>
 
-      <div className="my-4 grid gap-2 sm:grid-cols-2">
+      <div className="my-4 grid gap-2 sm:grid-cols-3">
+        {/* Buscador */}
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="tap pl-9"
-            placeholder="Buscar producto"
+            placeholder="Buscar por código o nombre..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
+
+        {/* Categoría */}
         <Select value={cat} onValueChange={(v) => setCat(v as Category | "todas")}>
           <SelectTrigger className="tap">
-            <SelectValue />
+            <SelectValue placeholder="Categoría: Todas" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="todas">Todas las categorías</SelectItem>
@@ -88,7 +102,39 @@ function Catalogo() {
             ))}
           </SelectContent>
         </Select>
+
+        {/* Temática */}
+        <Select value={themeFilter} onValueChange={setThemeFilter}>
+          <SelectTrigger className="tap">
+            <Tag className="mr-1.5 h-3.5 w-3.5 text-primary" />
+            <SelectValue placeholder="Temática: Todas" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas">Todas las temáticas</SelectItem>
+            {themes.map((t) => (
+              <SelectItem key={t.id} value={t.id}>
+                {t.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
+
+      {(q || cat !== "todas" || themeFilter !== "todas") && (
+        <div className="mb-4 flex items-center justify-between text-xs text-muted-foreground">
+          <span>{rows.length} producto(s) encontrado(s)</span>
+          <button
+            onClick={() => {
+              setQ("");
+              setCat("todas");
+              setThemeFilter("todas");
+            }}
+            className="text-primary underline flex items-center gap-1"
+          >
+            <X className="h-3 w-3" /> Limpiar filtros
+          </button>
+        </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {rows.map((p) => (
@@ -96,9 +142,9 @@ function Catalogo() {
         ))}
       </div>
 
-      {isLoading && <p className="py-12 text-center text-sm text-muted-foreground">Cargando…</p>}
+      {isLoading && <p className="py-12 text-center text-sm text-muted-foreground">Cargando catálogo…</p>}
       {!isLoading && rows.length === 0 && (
-        <p className="py-12 text-center text-sm text-muted-foreground">Sin productos.</p>
+        <p className="py-12 text-center text-sm text-muted-foreground">No hay productos con los filtros aplicados.</p>
       )}
     </ShopShell>
   );

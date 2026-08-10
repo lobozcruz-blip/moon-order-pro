@@ -29,7 +29,7 @@ export function useShopCatalog() {
       const { data, error } = await supabase
         .from("products")
         .select(
-          "id, sku, name, category, base_price, description, product_images(id, storage_path, external_url, is_primary, sort_order)",
+          "id, sku, name, category, base_price, description, product_images(id, storage_path, external_url, is_primary, sort_order), product_theme_links(theme_id, product_themes(id, name, active))",
         )
         .eq("active", true)
         .order("name");
