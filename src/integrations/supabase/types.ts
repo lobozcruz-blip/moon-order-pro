@@ -1082,6 +1082,7 @@ export type Database = {
       my_customer_id: { Args: never; Returns: string }
       owns_order: { Args: { _order_id: string }; Returns: boolean }
       place_client_order: { Args: { payload: Json }; Returns: string }
+      place_staff_order: { Args: { payload: Json }; Returns: string }
       purge_demo_data: { Args: never; Returns: undefined }
       recalc_order: { Args: { _order_id: string }; Returns: undefined }
       set_user_role: {
