@@ -668,6 +668,33 @@ export type Database = {
           },
         ]
       }
+      phone_verification_codes: {
+        Row: {
+          code: string
+          consumed: boolean
+          created_at: string
+          expires_at: string
+          id: string
+          phone_normalized: string
+        }
+        Insert: {
+          code: string
+          consumed?: boolean
+          created_at?: string
+          expires_at: string
+          id?: string
+          phone_normalized: string
+        }
+        Update: {
+          code?: string
+          consumed?: boolean
+          created_at?: string
+          expires_at?: string
+          id?: string
+          phone_normalized?: string
+        }
+        Relationships: []
+      }
       product_images: {
         Row: {
           created_at: string
@@ -793,6 +820,63 @@ export type Database = {
           status?: string
           total_rows?: number
           updated_count?: number
+        }
+        Relationships: []
+      }
+      product_theme_links: {
+        Row: {
+          created_at: string
+          product_id: string
+          theme_id: string
+        }
+        Insert: {
+          created_at?: string
+          product_id: string
+          theme_id: string
+        }
+        Update: {
+          created_at?: string
+          product_id?: string
+          theme_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_theme_links_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_theme_links_theme_id_fkey"
+            columns: ["theme_id"]
+            isOneToOne: false
+            referencedRelation: "product_themes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_themes: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
         }
         Relationships: []
       }
