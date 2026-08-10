@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Search, Tag, X, Check, Package, Sparkles } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,11 @@ export type ProductPickerProps = {
   onSelect: (product: any | null) => void;
   categoryFilter?: Category | "TODAS";
   onCategoryFilterChange?: (cat: Category | "TODAS") => void;
+  themeFilter?: string;
+  onThemeFilterChange?: (themeId: string) => void;
+  searchQuery?: string;
+  onSearchQueryChange?: (q: string) => void;
+  searchInputRef?: React.RefObject<HTMLInputElement | null>;
   className?: string;
   allowManual?: boolean;
 };
@@ -32,26 +37,53 @@ export function ProductPicker({
   onSelect,
   categoryFilter = "TODAS",
   onCategoryFilterChange,
+  themeFilter: controlledThemeFilter,
+  onThemeFilterChange,
+  searchQuery: controlledSearch,
+  onSearchQueryChange,
+  searchInputRef,
   className,
   allowManual = true,
 }: ProductPickerProps) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [localCategory, setLocalCategory] = useState<Category | "TODAS">(categoryFilter);
-  const [themeFilter, setThemeFilter] = useState<string>("TODAS");
+  // Search state (controlled or uncontrolled)
+  const [internalSearch, setInternalSearch] = useState("");
+  const isSearchControlled = controlledSearch !== undefined;
+  const rawSearch = isSearchControlled ? controlledSearch : internalSearch;
 
-  // Sync category filter if controlled from outside
+  const [debouncedSearch, setDebouncedSearch] = useState(rawSearch);
+  const [localCategory, setLocalCategory] = useState<Category | "TODAS">(categoryFilter);
+  const [localThemeFilter, setLocalThemeFilter] = useState<string>("TODAS");
+
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(0);
+
+  const localInputRef = useRef<HTMLInputElement>(null);
+  const activeInputRef = searchInputRef || localInputRef;
+
+  // Sync category filter
   useEffect(() => {
     setLocalCategory(categoryFilter);
   }, [categoryFilter]);
 
+  // Sync theme filter
+  const activeThemeFilter = controlledThemeFilter !== undefined ? controlledThemeFilter : localThemeFilter;
+  const handleThemeChange = (t: string) => {
+    if (onThemeFilterChange) onThemeFilterChange(t);
+    else setLocalThemeFilter(t);
+  };
+
   // Debounce search (200ms)
   useEffect(() => {
     const handler = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
+      setDebouncedSearch(rawSearch);
+      setHighlightedIndex(0);
     }, 200);
     return () => clearTimeout(handler);
-  }, [searchTerm]);
+  }, [rawSearch]);
+
+  const handleSearchChange = (val: string) => {
+    if (onSearchQueryChange) onSearchQueryChange(val);
+    else setInternalSearch(val);
+  };
 
   const activeCategory = localCategory;
   const handleCategoryChange = (c: Category | "TODAS") => {
@@ -69,16 +101,16 @@ export function ProductPicker({
     let list = products.filter((p) => {
       if (!p.active) return false;
       if (activeCategory !== "TODAS" && p.category !== activeCategory) return false;
-      if (themeFilter !== "TODAS") {
+      if (activeThemeFilter !== "TODAS") {
         const hasTheme = (p.product_theme_links ?? []).some(
-          (tl: any) => tl.theme_id === themeFilter,
+          (tl: any) => tl.theme_id === activeThemeFilter,
         );
         if (!hasTheme) return false;
       }
       return true;
     });
 
-    if (!term) return list.slice(0, 60);
+    if (!term) return list.slice(0, 50);
 
     // 2. Coincidencia parcial tipo "contiene"
     const matched = list.filter((p) => {
@@ -126,30 +158,45 @@ export function ProductPicker({
 
         return aName.localeCompare(bName);
       })
-      .slice(0, 60);
-  }, [products, debouncedSearch, activeCategory, themeFilter]);
-
-  const selectedProduct = useMemo(
-    () => products.find((p) => p.id === selectedProductId) ?? null,
-    [products, selectedProductId],
-  );
+      .slice(0, 50);
+  }, [products, debouncedSearch, activeCategory, activeThemeFilter]);
 
   const clearAllFilters = () => {
-    setSearchTerm("");
+    handleSearchChange("");
     setDebouncedSearch("");
     handleCategoryChange("TODAS");
-    setThemeFilter("TODAS");
+    handleThemeChange("TODAS");
+    activeInputRef.current?.focus();
   };
 
   const hasActiveFilters =
     debouncedSearch.trim().length > 0 ||
     activeCategory !== "TODAS" ||
-    themeFilter !== "TODAS";
+    activeThemeFilter !== "TODAS";
 
   const selectedThemeName = useMemo(() => {
-    if (themeFilter === "TODAS") return null;
-    return themes.find((t) => t.id === themeFilter)?.name ?? null;
-  }, [themes, themeFilter]);
+    if (activeThemeFilter === "TODAS") return null;
+    return themes.find((t) => t.id === activeThemeFilter)?.name ?? null;
+  }, [themes, activeThemeFilter]);
+
+  // Teclado: Flechas arriba/abajo y Enter
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (filteredAndSortedProducts.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex((prev) => Math.min(prev + 1, filteredAndSortedProducts.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex((prev) => Math.max(prev - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const productToSelect = filteredAndSortedProducts[highlightedIndex];
+      if (productToSelect) {
+        onSelect(productToSelect);
+      }
+    }
+  };
 
   return (
     <div className={cn("space-y-3 rounded-xl border border-border bg-card/60 p-3.5", className)}>
@@ -157,15 +204,20 @@ export function ProductPicker({
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          className="tap pl-9 pr-9"
-          placeholder="Buscar producto por SKU o nombre (ej. COR-0105, Corazón, Mamá)..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          ref={activeInputRef as any}
+          className="tap pl-9 pr-9 font-medium"
+          placeholder="Buscar por código SKU o nombre (ej. COR-0105, Navidad, Estrella)..."
+          value={rawSearch}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          onKeyDown={handleKeyDown}
         />
-        {searchTerm && (
+        {rawSearch && (
           <button
             type="button"
-            onClick={() => setSearchTerm("")}
+            onClick={() => {
+              handleSearchChange("");
+              activeInputRef.current?.focus();
+            }}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
           >
             <X className="h-4 w-4" />
@@ -195,7 +247,7 @@ export function ProductPicker({
         </div>
 
         {/* Temática Dropdown */}
-        <Select value={themeFilter} onValueChange={setThemeFilter}>
+        <Select value={activeThemeFilter} onValueChange={handleThemeChange}>
           <SelectTrigger className="tap h-8 w-44 text-xs ml-auto sm:ml-0">
             <Tag className="mr-1.5 h-3.5 w-3.5 text-primary" />
             <SelectValue placeholder="Temática: Todas" />
@@ -232,7 +284,7 @@ export function ProductPicker({
               {selectedThemeName}
               <button
                 type="button"
-                onClick={() => setThemeFilter("TODAS")}
+                onClick={() => handleThemeChange("TODAS")}
                 className="hover:text-destructive"
               >
                 <X className="h-3 w-3" />
@@ -244,7 +296,7 @@ export function ProductPicker({
               "{debouncedSearch.trim()}"
               <button
                 type="button"
-                onClick={() => setSearchTerm("")}
+                onClick={() => handleSearchChange("")}
                 className="hover:text-destructive"
               >
                 <X className="h-3 w-3" />
@@ -294,8 +346,9 @@ export function ProductPicker({
           </button>
         )}
 
-        {filteredAndSortedProducts.map((p) => {
+        {filteredAndSortedProducts.map((p, idx) => {
           const isSelected = selectedProductId === p.id;
+          const isHighlighted = highlightedIndex === idx;
           const img = (p.product_images ?? []).find((i: any) => i.is_primary) ?? p.product_images?.[0];
           const prodThemes = (p.product_theme_links ?? [])
             .map((tl: any) => tl.product_themes?.name)
@@ -306,11 +359,14 @@ export function ProductPicker({
               key={p.id}
               type="button"
               onClick={() => onSelect(p)}
+              onMouseEnter={() => setHighlightedIndex(idx)}
               className={cn(
                 "flex w-full items-center gap-3 rounded-lg border p-2 text-left text-xs transition-all",
                 isSelected
                   ? "border-primary bg-primary/15 text-foreground shadow-sm ring-1 ring-primary"
-                  : "border-border/60 bg-card hover:bg-secondary/70",
+                  : isHighlighted
+                    ? "border-primary/50 bg-secondary text-foreground"
+                    : "border-border/60 bg-card hover:bg-secondary/70",
               )}
             >
               {/* Miniatura */}
