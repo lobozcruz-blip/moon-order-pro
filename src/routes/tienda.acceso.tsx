@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Cookie, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { normalizePhone, clientEmail } from "@/lib/phone";
 import { registerClient } from "@/lib/shop.functions";
+import { BrandLogo } from "@/components/BrandLogo";
+import { useBrandName } from "@/lib/brand";
 
 export const Route = createFileRoute("/tienda/acceso")({
   ssr: false,
@@ -38,6 +40,7 @@ function AccesoTienda() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const brandName = useBrandName();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -72,14 +75,12 @@ function AccesoTienda() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-12">
+    <div className="theme-shop flex min-h-screen items-center justify-center bg-background px-4 py-12">
       <div className="w-full max-w-sm">
-        <div className="mb-8 text-center">
-          <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-[var(--shadow-glow)]">
-            <Cookie className="h-7 w-7" />
-          </span>
-          <h1 className="font-display text-3xl">
-            Cookies <span className="text-primary">Moon</span>
+        <div className="mb-8 flex flex-col items-center text-center">
+          <BrandLogo size="lg" />
+          <h1 className="mt-4 font-display text-3xl">
+            {brandName}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {mode === "registro"

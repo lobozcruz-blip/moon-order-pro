@@ -8,7 +8,8 @@ export type Folder =
   | "notas"
   | "comprobantes"
   | "guias"
-  | "importaciones";
+  | "importaciones"
+  | "marca";
 
 export async function uploadFile(folder: Folder, file: File, keyHint = "") {
   const ext = file.name.split(".").pop() ?? "bin";

@@ -1,6 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState } from "react";
-import { Cookie, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { BrandLogo } from "@/components/BrandLogo";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 
@@ -74,9 +75,7 @@ function Consent() {
   return (
     <main className="flex min-h-screen items-center justify-center px-4 py-12">
       <div className="panel w-full max-w-sm space-y-5 p-6 text-center">
-        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
-          <Cookie className="h-7 w-7" />
-        </span>
+        <BrandLogo size="lg" className="mx-auto" />
         <div className="space-y-2">
           <h1 className="font-display text-2xl">Conectar {clientName}</h1>
           <p className="text-sm text-muted-foreground">

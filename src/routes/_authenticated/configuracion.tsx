@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Save, Trash2, UserPlus, ShieldCheck } from "lucide-react";
+import { Loader2, Save, Trash2, UserPlus, ShieldCheck, Upload, Image as ImageIcon, Palette, Sparkles, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -20,10 +20,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePriceRules, useInvalidate } from "@/lib/queries";
 import { MODALITIES, SIZES, money, dateTimeFmt, type Modality } from "@/lib/cm";
 import { useAuth } from "@/lib/auth";
-import { logActivity } from "@/lib/storage";
+import { logActivity, uploadFile, signedUrl } from "@/lib/storage";
 import { listUsers, createUser, updateUser } from "@/lib/users.functions";
 import { useActivity, useProfiles } from "@/lib/queries";
 import { useWhatsappNumber } from "@/lib/shop-queries";
+import { useBrand } from "@/lib/brand";
+import { BrandLogo } from "@/components/BrandLogo";
 
 
 export const Route = createFileRoute("/_authenticated/configuracion")({
@@ -58,6 +60,9 @@ function Configuracion() {
           <TabsTrigger value="tienda" className="flex-1">
             Tienda
           </TabsTrigger>
+          <TabsTrigger value="marca" className="flex-1">
+            Marca
+          </TabsTrigger>
           <TabsTrigger value="usuarios" className="flex-1">
             Usuarios
           </TabsTrigger>
@@ -70,6 +75,9 @@ function Configuracion() {
         </TabsContent>
         <TabsContent value="tienda">
           <TiendaConfig />
+        </TabsContent>
+        <TabsContent value="marca">
+          <MarcaConfig />
         </TabsContent>
         <TabsContent value="usuarios">
           <Usuarios />
@@ -150,6 +158,532 @@ function TiendaConfig() {
           Guardar
         </Button>
       </div>
+    </div>
+  );
+}
+
+function MarcaConfig() {
+  const { isAdmin } = useAuth();
+  const invalidate = useInvalidate();
+  const { data: brand, isLoading } = useBrand();
+
+  const [name, setName] = useState("Cookies Moon");
+  const [slogan, setSlogan] = useState("");
+  const [colorPrimary, setColorPrimary] = useState("#5CC6D0");
+  const [colorSecondary, setColorSecondary] = useState("#7D421F");
+  const [colorAccent, setColorAccent] = useState("#EFCE8B");
+
+  const [logoPath, setLogoPath] = useState<string | null>(null);
+  const [logoAltPath, setLogoAltPath] = useState<string | null>(null);
+  const [faviconPath, setFaviconPath] = useState<string | null>(null);
+
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [logoAltPreview, setLogoAltPreview] = useState<string | null>(null);
+  const [faviconPreview, setFaviconPreview] = useState<string | null>(null);
+
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingLogoAlt, setUploadingLogoAlt] = useState(false);
+  const [uploadingFavicon, setUploadingFavicon] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (brand) {
+      setName(brand.name || "Cookies Moon");
+      setSlogan(brand.slogan || "");
+      setColorPrimary(brand.colorPrimary || "#5CC6D0");
+      setColorSecondary(brand.colorSecondary || "#7D421F");
+      setColorAccent(brand.colorAccent || "#EFCE8B");
+      setLogoPath(brand.logoPath || null);
+      setLogoAltPath(brand.logoAltPath || null);
+      setFaviconPath(brand.faviconPath || null);
+    }
+  }, [brand]);
+
+  useEffect(() => {
+    if (logoPath) signedUrl(logoPath).then(setLogoPreview);
+    else setLogoPreview(null);
+  }, [logoPath]);
+
+  useEffect(() => {
+    if (logoAltPath) signedUrl(logoAltPath).then(setLogoAltPreview);
+    else setLogoAltPreview(null);
+  }, [logoAltPath]);
+
+  useEffect(() => {
+    if (faviconPath) signedUrl(faviconPath).then(setFaviconPreview);
+    else setFaviconPreview(null);
+  }, [faviconPath]);
+
+  const handleUpload = async (
+    type: "logo" | "logoAlt" | "favicon",
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validTypes = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
+    if (!validTypes.includes(file.type)) {
+      toast.error("Formato no válido. Usa PNG, JPG, WEBP o SVG.");
+      return;
+    }
+
+    if (type === "logo") setUploadingLogo(true);
+    else if (type === "logoAlt") setUploadingLogoAlt(true);
+    else setUploadingFavicon(true);
+
+    try {
+      const path = await uploadFile("marca", file);
+      if (type === "logo") {
+        setLogoPath(path);
+        const url = await signedUrl(path);
+        setLogoPreview(url);
+      } else if (type === "logoAlt") {
+        setLogoAltPath(path);
+        const url = await signedUrl(path);
+        setLogoAltPreview(url);
+      } else {
+        setFaviconPath(path);
+        const url = await signedUrl(path);
+        setFaviconPreview(url);
+      }
+      toast.success("Archivo subido. Haz clic en Guardar para aplicar.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al subir la imagen");
+    } finally {
+      if (type === "logo") setUploadingLogo(false);
+      else if (type === "logoAlt") setUploadingLogoAlt(false);
+      else setUploadingFavicon(false);
+    }
+  };
+
+  const handleRestoreDefaults = () => {
+    setColorPrimary("#5CC6D0");
+    setColorSecondary("#7D421F");
+    setColorAccent("#EFCE8B");
+    toast.info("Paleta oficial de Cookies Moon restaurada. Guarda para aplicar.");
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const updates = [
+        { key: "brand_name", value: name.trim() || "Cookies Moon" },
+        { key: "brand_slogan", value: slogan.trim() },
+        { key: "brand_color_primary", value: colorPrimary },
+        { key: "brand_color_secondary", value: colorSecondary },
+        { key: "brand_color_accent", value: colorAccent },
+        { key: "brand_logo", value: logoPath ?? "" },
+        { key: "brand_logo_alt", value: logoAltPath ?? "" },
+        { key: "brand_favicon", value: faviconPath ?? "" },
+      ];
+
+      for (const u of updates) {
+        const { error } = await supabase
+          .from("app_settings")
+          .upsert({ key: u.key, value: u.value, updated_at: new Date().toISOString() }, { onConflict: "key" });
+        if (error) throw error;
+      }
+
+      await logActivity({
+        action: "Identidad de marca actualizada",
+        entity: "app_settings",
+        detail: `Nombre: ${name}, Logo: ${logoPath ? "Configurado" : "Sin logo"}`,
+      });
+
+      invalidate("brand-settings", "brand-logo-url", "activity");
+      toast.success("Identidad de marca guardada con éxito");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo guardar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="panel p-8 text-center">
+        <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
+        <p className="mt-2 text-sm text-muted-foreground">Cargando identidad de marca…</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* 1. Datos Principales */}
+      <div className="panel space-y-4 p-5">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-primary" />
+          <h2 className="font-display text-lg">Información de marca</h2>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="brand-name">Nombre comercial</Label>
+            <Input
+              id="brand-name"
+              className="tap"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={!isAdmin}
+              placeholder="Cookies Moon"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="brand-slogan">Slogan o texto secundario (opcional)</Label>
+            <Input
+              id="brand-slogan"
+              className="tap"
+              value={slogan}
+              onChange={(e) => setSlogan(e.target.value)}
+              disabled={!isAdmin}
+              placeholder="Cortadores y repostería creativa"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Logo y Archivos */}
+      <div className="panel space-y-4 p-5">
+        <div className="flex items-center gap-2">
+          <ImageIcon className="h-5 w-5 text-primary" />
+          <h2 className="font-display text-lg">Logos e imagen gráfica</h2>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Formatos aceptados: PNG, JPG, WEBP, SVG. Se recomienda PNG o SVG con fondo transparente. El logo conservará siempre su proporción original.
+        </p>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          {/* Logo principal */}
+          <div className="rounded-xl border border-border p-4">
+            <p className="text-sm font-semibold">Logo principal</p>
+            <p className="mb-3 text-xs text-muted-foreground">Usado en toda la app y catálogo.</p>
+            <div className="flex h-32 items-center justify-center rounded-lg bg-secondary/60 p-2">
+              {logoPreview ? (
+                <img
+                  src={logoPreview}
+                  alt="Logo principal"
+                  className="max-h-full max-w-full object-contain"
+                />
+              ) : (
+                <div className="flex flex-col items-center text-muted-foreground">
+                  <ImageIcon className="h-8 w-8 opacity-40" />
+                  <span className="mt-1 text-xs">Sin logo cargado</span>
+                </div>
+              )}
+            </div>
+            {isAdmin && (
+              <div className="mt-3 flex gap-2">
+                <label className="flex-1">
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                    className="hidden"
+                    onChange={(e) => handleUpload("logo", e)}
+                    disabled={uploadingLogo}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="tap w-full"
+                    disabled={uploadingLogo}
+                    asChild
+                  >
+                    <span>
+                      {uploadingLogo ? (
+                        <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Upload className="mr-1 h-3.5 w-3.5" />
+                      )}
+                      {logoPreview ? "Reemplazar" : "Subir logo"}
+                    </span>
+                  </Button>
+                </label>
+                {logoPreview && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="tap text-destructive hover:bg-destructive/10"
+                    onClick={() => {
+                      setLogoPath(null);
+                      setLogoPreview(null);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Logo alternativo */}
+          <div className="rounded-xl border border-border p-4">
+            <p className="text-sm font-semibold">Logo alternativo</p>
+            <p className="mb-3 text-xs text-muted-foreground">Versión secundaria (opcional).</p>
+            <div className="flex h-32 items-center justify-center rounded-lg bg-secondary/60 p-2">
+              {logoAltPreview ? (
+                <img
+                  src={logoAltPreview}
+                  alt="Logo alternativo"
+                  className="max-h-full max-w-full object-contain"
+                />
+              ) : (
+                <div className="flex flex-col items-center text-muted-foreground">
+                  <ImageIcon className="h-8 w-8 opacity-40" />
+                  <span className="mt-1 text-xs">Sin logo alternativo</span>
+                </div>
+              )}
+            </div>
+            {isAdmin && (
+              <div className="mt-3 flex gap-2">
+                <label className="flex-1">
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                    className="hidden"
+                    onChange={(e) => handleUpload("logoAlt", e)}
+                    disabled={uploadingLogoAlt}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="tap w-full"
+                    disabled={uploadingLogoAlt}
+                    asChild
+                  >
+                    <span>
+                      {uploadingLogoAlt ? (
+                        <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Upload className="mr-1 h-3.5 w-3.5" />
+                      )}
+                      {logoAltPreview ? "Reemplazar" : "Subir logo alt"}
+                    </span>
+                  </Button>
+                </label>
+                {logoAltPreview && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="tap text-destructive hover:bg-destructive/10"
+                    onClick={() => {
+                      setLogoAltPath(null);
+                      setLogoAltPreview(null);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Favicon */}
+          <div className="rounded-xl border border-border p-4">
+            <p className="text-sm font-semibold">Favicon</p>
+            <p className="mb-3 text-xs text-muted-foreground">Icono de pestaña de navegador.</p>
+            <div className="flex h-32 items-center justify-center rounded-lg bg-secondary/60 p-2">
+              {faviconPreview ? (
+                <img
+                  src={faviconPreview}
+                  alt="Favicon"
+                  className="h-12 w-12 object-contain"
+                />
+              ) : (
+                <div className="flex flex-col items-center text-muted-foreground">
+                  <ImageIcon className="h-8 w-8 opacity-40" />
+                  <span className="mt-1 text-xs">Sin favicon personalizado</span>
+                </div>
+              )}
+            </div>
+            {isAdmin && (
+              <div className="mt-3 flex gap-2">
+                <label className="flex-1">
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon"
+                    className="hidden"
+                    onChange={(e) => handleUpload("favicon", e)}
+                    disabled={uploadingFavicon}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="tap w-full"
+                    disabled={uploadingFavicon}
+                    asChild
+                  >
+                    <span>
+                      {uploadingFavicon ? (
+                        <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Upload className="mr-1 h-3.5 w-3.5" />
+                      )}
+                      {faviconPreview ? "Reemplazar" : "Subir favicon"}
+                    </span>
+                  </Button>
+                </label>
+                {faviconPreview && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="tap text-destructive hover:bg-destructive/10"
+                    onClick={() => {
+                      setFaviconPath(null);
+                      setFaviconPreview(null);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Paleta oficial de colores */}
+      <div className="panel space-y-4 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Palette className="h-5 w-5 text-primary" />
+            <h2 className="font-display text-lg">Paleta oficial Cookies Moon</h2>
+          </div>
+          {isAdmin && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="tap text-xs"
+              onClick={handleRestoreDefaults}
+            >
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+              Restaurar colores oficiales
+            </Button>
+          )}
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          {/* Principal */}
+          <div className="space-y-2 rounded-xl border border-border p-3">
+            <Label htmlFor="color-primary" className="text-xs font-semibold">
+              Turquesa principal
+            </Label>
+            <div className="flex items-center gap-2">
+              <input
+                id="color-primary"
+                type="color"
+                value={colorPrimary}
+                onChange={(e) => setColorPrimary(e.target.value)}
+                disabled={!isAdmin}
+                className="h-9 w-12 cursor-pointer rounded-lg border border-border bg-transparent p-0.5"
+              />
+              <Input
+                value={colorPrimary}
+                onChange={(e) => setColorPrimary(e.target.value)}
+                disabled={!isAdmin}
+                className="tap font-mono text-xs"
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">Color principal de interacción y botones.</p>
+          </div>
+
+          {/* Secundario */}
+          <div className="space-y-2 rounded-xl border border-border p-3">
+            <Label htmlFor="color-secondary" className="text-xs font-semibold">
+              Café chocolate
+            </Label>
+            <div className="flex items-center gap-2">
+              <input
+                id="color-secondary"
+                type="color"
+                value={colorSecondary}
+                onChange={(e) => setColorSecondary(e.target.value)}
+                disabled={!isAdmin}
+                className="h-9 w-12 cursor-pointer rounded-lg border border-border bg-transparent p-0.5"
+              />
+              <Input
+                value={colorSecondary}
+                onChange={(e) => setColorSecondary(e.target.value)}
+                disabled={!isAdmin}
+                className="tap font-mono text-xs"
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">Detalles de marca y contrastes cálidos.</p>
+          </div>
+
+          {/* Acento */}
+          <div className="space-y-2 rounded-xl border border-border p-3">
+            <Label htmlFor="color-accent" className="text-xs font-semibold">
+              Beige galleta
+            </Label>
+            <div className="flex items-center gap-2">
+              <input
+                id="color-accent"
+                type="color"
+                value={colorAccent}
+                onChange={(e) => setColorAccent(e.target.value)}
+                disabled={!isAdmin}
+                className="h-9 w-12 cursor-pointer rounded-lg border border-border bg-transparent p-0.5"
+              />
+              <Input
+                value={colorAccent}
+                onChange={(e) => setColorAccent(e.target.value)}
+                disabled={!isAdmin}
+                className="tap font-mono text-xs"
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">Acentos, fondos suaves y detalles.</p>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Vista previa en vivo */}
+      <div className="panel space-y-4 p-5">
+        <h2 className="font-display text-lg">Vista previa en vivo</h2>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {/* App interna (Dark) */}
+          <div className="space-y-2 rounded-xl border border-border bg-background p-4">
+            <span className="chip bg-primary/20 text-xs font-bold text-primary">
+              App interna (Tema oscuro)
+            </span>
+            <div className="flex items-center justify-between border-b border-border py-3">
+              <BrandLogo size="sm" showName />
+              <span className="text-xs text-muted-foreground">Panel de taller</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Fondo oscuro #0F1117 con tarjetas #181C25 y botones turquesa.
+            </p>
+          </div>
+
+          {/* Catálogo de clientas (Light) */}
+          <div className="theme-shop space-y-2 rounded-xl border border-border bg-background p-4 text-foreground">
+            <span className="chip bg-primary/20 text-xs font-bold text-primary">
+              Catálogo clientas (Tema claro)
+            </span>
+            <div className="flex items-center justify-between border-b border-border py-3">
+              <BrandLogo size="sm" showName />
+              <span className="text-xs text-muted-foreground">Tienda en línea</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Fondo blanco limpio con acentos turquesa y café para las clientas.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Botón Guardar */}
+      {isAdmin && (
+        <Button className="tap font-semibold" onClick={save} disabled={saving}>
+          {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+          Guardar identidad de marca
+        </Button>
+      )}
     </div>
   );
 }

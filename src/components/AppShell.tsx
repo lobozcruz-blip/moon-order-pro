@@ -9,12 +9,12 @@ import {
   Settings,
   Plus,
   LogOut,
-  Cookie,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { BrandLogo } from "@/components/BrandLogo";
 
 const NAV = [
   { to: "/panel", label: "Panel", icon: LayoutDashboard },
@@ -40,12 +40,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Sidebar (escritorio) */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-sidebar-border bg-sidebar p-4 lg:flex">
         <Link to="/panel" className="mb-6 flex items-center gap-2 px-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Cookie className="h-5 w-5" />
-          </span>
-          <span className="font-display text-lg leading-tight">
-            Cookies <span className="text-primary">Moon</span>
-          </span>
+          <BrandLogo size="sm" showName />
         </Link>
 
         <Button asChild className="tap mb-4 w-full font-semibold">
@@ -82,12 +77,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Barra superior (móvil) */}
       <header className="sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-border bg-sidebar px-4 py-3 lg:hidden">
         <Link to="/panel" className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Cookie className="h-4 w-4" />
-          </span>
-          <span className="font-display text-base">
-            Cookies <span className="text-primary">Moon</span>
-          </span>
+          <BrandLogo size="sm" showName />
         </Link>
         <Button variant="ghost" size="icon" className="tap" onClick={signOut} aria-label="Cerrar sesión">
           <LogOut className="h-5 w-5" />
