@@ -67,7 +67,7 @@ function Pendientes() {
         subtitle="Pedidos que enviaron tus clientas y esperan confirmación."
         action={
           <Button asChild variant="secondary" className="tap">
-            <Link to="/pedidos" search={{}}>Ir al tablero</Link>
+            <Link to="/pedidos" search={{ cliente: undefined }}>Ir al tablero</Link>
           </Button>
         }
       />

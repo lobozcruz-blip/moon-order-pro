@@ -67,7 +67,7 @@ function DetallePedido() {
   const { orderId } = Route.useParams();
   const { data: order, isLoading } = useOrder(orderId);
   const { data: profiles } = useProfiles();
-  const { data: activity } = useActivity(orderId);
+  const { data: activity } = useActivity();
   const invalidate = useInvalidate();
   const { isAdmin } = useAuth();
   const [viewer, setViewer] = useState<{ images: ImgRef[]; title: string } | null>(null);
