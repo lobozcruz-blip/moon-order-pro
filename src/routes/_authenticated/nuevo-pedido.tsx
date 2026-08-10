@@ -324,7 +324,7 @@ function NuevoPedido() {
         ),
       );
       toast.success(
-        `Cantidad actualizada: ${items[existingIndex].quantity + draftItem.quantity} piezas para "${draftItem.product_name}"`,
+        `Cantidad actualizada: ${(items[existingIndex]?.quantity ?? 0) + draftItem.quantity} piezas para "${draftItem.product_name}"`,
       );
     } else {
       // Añadir nueva fila
@@ -352,6 +352,7 @@ function NuevoPedido() {
   // ==========================================
   const handleRemoveItem = (index: number) => {
     const itemToRemove = items[index];
+    if (!itemToRemove) return;
     setItems((prev) => prev.filter((_, i) => i !== index));
 
     toast(`"${itemToRemove.product_name}" eliminado`, {
@@ -526,7 +527,6 @@ function NuevoPedido() {
       }
 
       await supabase.rpc("assign_folio", { _order_id: order.id });
-      await supabase.rpc("recalc_order", { _order_id: order.id });
       await logActivity({ action: "Pedido creado", entity: "order", order_id: order.id });
 
       toast.success("¡Pedido registrado exitosamente!");

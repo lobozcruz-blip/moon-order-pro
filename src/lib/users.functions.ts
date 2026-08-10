@@ -75,7 +75,7 @@ export const listUsers = createServerFn({ method: "GET" })
       const r = roles?.find((r) => r.user_id === p.id)?.role ?? "colaborador";
       return {
         id: p.id,
-        email: p.email,
+        email: p.email ?? "—",
         full_name: p.full_name,
         active: p.active,
         created_at: p.created_at,

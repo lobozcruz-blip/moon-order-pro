@@ -73,7 +73,6 @@ function DetallePedido() {
   const [viewer, setViewer] = useState<{ images: ImgRef[]; title: string } | null>(null);
 
   const refresh = async () => {
-    await supabase.rpc("recalc_order", { _order_id: orderId });
     invalidate("order", "orders", "activity");
   };
 
@@ -193,7 +192,7 @@ function DetallePedido() {
               {items.map((it) => {
                 const imgs: ImgRef[] = [
                   ...(it.order_item_images ?? []),
-                  ...((it.products?.product_images ?? []) as ImgRef[]),
+                  ...(((it as { products?: { product_images?: ImgRef[] } }).products?.product_images ?? []) as ImgRef[]),
                 ];
                 return (
                   <div key={it.id} className="panel p-3">

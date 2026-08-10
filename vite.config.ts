@@ -14,6 +14,6 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
-    plugins: process.platform === "win32" && !process.env.LOVABLE_MCP ? [] : [mcpPlugin()],
+    plugins: process.platform === "win32" && !process.env['LOVABLE_MCP'] ? [] : [mcpPlugin()],
   },
 });
