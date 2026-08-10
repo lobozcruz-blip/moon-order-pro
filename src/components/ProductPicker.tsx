@@ -385,11 +385,11 @@ export function ProductPicker({
                   <span
                     className="chip text-[10px] py-0 px-1.5"
                     style={{
-                      color: `var(--${CATEGORY_META[p.category].token})`,
-                      background: `color-mix(in oklab, var(--${CATEGORY_META[p.category].token}) 16%, transparent)`,
+                      color: `var(--${CATEGORY_META[p.category as keyof typeof CATEGORY_META].token})`,
+                      background: `color-mix(in oklab, var(--${CATEGORY_META[p.category as keyof typeof CATEGORY_META].token}) 16%, transparent)`,
                     }}
                   >
-                    {CATEGORY_META[p.category].label}
+                    {CATEGORY_META[p.category as keyof typeof CATEGORY_META].label}
                   </span>
                 </div>
                 <p className="truncate font-semibold text-foreground">{p.name}</p>
