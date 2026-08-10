@@ -192,6 +192,401 @@
           ]
         },
         "outputSchema": null
+      },
+      {
+        "name": "set_order_status",
+        "title": "Cambiar estado del pedido",
+        "description": "Cambia el estado de un pedido de Cookies Moon (en_espera, en_preparacion, enviado, finalizado, pausado, cancelado) buscándolo por folio o identificador.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "folio": {
+              "description": "Folio del pedido, por ejemplo CM-2026-0007.",
+              "type": "string"
+            },
+            "order_id": {
+              "description": "Identificador interno del pedido.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "en_espera",
+                "en_preparacion",
+                "enviado",
+                "finalizado",
+                "pausado",
+                "cancelado"
+              ],
+              "description": "Nuevo estado del pedido."
+            }
+          },
+          "required": [
+            "status"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "add_payment",
+        "title": "Registrar pago",
+        "description": "Registra un abono en un pedido de Cookies Moon (monto, fecha, método y referencia). El total pagado y el saldo se recalculan automáticamente.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "folio": {
+              "description": "Folio del pedido, por ejemplo CM-2026-0007.",
+              "type": "string"
+            },
+            "order_id": {
+              "description": "Identificador interno del pedido.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "amount": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Monto del abono en pesos."
+            },
+            "method": {
+              "description": "Método de pago: efectivo, transferencia, deposito, otro. Por defecto transferencia.",
+              "type": "string"
+            },
+            "paid_at": {
+              "description": "Fecha del pago en formato AAAA-MM-DD.",
+              "type": "string"
+            },
+            "reference": {
+              "description": "Referencia o folio del comprobante.",
+              "type": "string"
+            },
+            "notes": {
+              "description": "Nota interna del pago.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "amount"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "update_item_progress",
+        "title": "Actualizar avance de producción",
+        "description": "Actualiza el avance de producción de un artículo de un pedido de Cookies Moon: marca el artículo como hecho o define cuántas piezas van listas. Devuelve el avance del pedido completo.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "folio": {
+              "description": "Folio del pedido, por ejemplo CM-2026-0007.",
+              "type": "string"
+            },
+            "order_id": {
+              "description": "Identificador interno del pedido.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "item_id": {
+              "description": "Identificador del artículo del pedido.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "item_name": {
+              "description": "Nombre o SKU del artículo, si no se conoce su identificador.",
+              "type": "string"
+            },
+            "done_quantity": {
+              "description": "Piezas terminadas.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "is_done": {
+              "description": "Marcar el artículo como terminado por completo.",
+              "type": "boolean"
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "upsert_customer",
+        "title": "Crear o encontrar cliente",
+        "description": "Da de alta una clienta de Cookies Moon con nombre y teléfono. Si el teléfono ya existe, devuelve la ficha existente en lugar de duplicarla.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "first_name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Nombre de la clienta."
+            },
+            "last_name": {
+              "description": "Apellido de la clienta.",
+              "type": "string"
+            },
+            "phone": {
+              "description": "Teléfono a 10 dígitos.",
+              "type": "string"
+            },
+            "contact_channel": {
+              "description": "Canal de contacto, por ejemplo whatsapp o instagram.",
+              "type": "string"
+            },
+            "notes": {
+              "description": "Notas internas de la clienta.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "first_name"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "create_order",
+        "title": "Crear pedido",
+        "description": "Crea un pedido completo de Cookies Moon para una clienta existente: artículos (con modalidad y tamaño para cortadores), tipo de entrega y datos de envío o entrega personal. El folio, los precios y los totales se calculan en el servidor.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "customer_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "description": "Identificador de la clienta (usa search_customers o upsert_customer)."
+            },
+            "delivery_type": {
+              "description": "Tipo de entrega del pedido.",
+              "type": "string",
+              "enum": [
+                "envio",
+                "entrega_personal"
+              ]
+            },
+            "priority": {
+              "description": "Prioridad.",
+              "type": "string",
+              "enum": [
+                "baja",
+                "normal",
+                "alta",
+                "urgente"
+              ]
+            },
+            "due_date": {
+              "description": "Fecha de entrega en formato AAAA-MM-DD.",
+              "type": "string"
+            },
+            "notes": {
+              "description": "Notas generales del pedido.",
+              "type": "string"
+            },
+            "items": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "product_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "description": "Identificador del producto del catálogo."
+                  },
+                  "quantity": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 999,
+                    "description": "Cantidad de piezas."
+                  },
+                  "modality": {
+                    "description": "Sólo cortadores: modalidad.",
+                    "type": "string",
+                    "enum": [
+                      "cutter_only",
+                      "cutter_with_stamp"
+                    ]
+                  },
+                  "size_cm": {
+                    "description": "Sólo cortadores: tamaño en centímetros.",
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "notes": {
+                    "description": "Nota del artículo.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "product_id",
+                  "quantity"
+                ]
+              },
+              "description": "Artículos del pedido."
+            },
+            "shipping": {
+              "description": "Datos de envío cuando delivery_type es envio.",
+              "type": "object",
+              "properties": {
+                "first_name": {
+                  "type": "string"
+                },
+                "last_name": {
+                  "type": "string"
+                },
+                "phone": {
+                  "type": "string"
+                },
+                "street": {
+                  "type": "string"
+                },
+                "ext_number": {
+                  "type": "string"
+                },
+                "int_number": {
+                  "type": "string"
+                },
+                "neighborhood": {
+                  "type": "string"
+                },
+                "municipality": {
+                  "type": "string"
+                },
+                "city": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "postal_code": {
+                  "type": "string"
+                },
+                "references_text": {
+                  "type": "string"
+                },
+                "special_instructions": {
+                  "type": "string"
+                }
+              }
+            },
+            "personal": {
+              "description": "Datos de entrega personal cuando delivery_type es entrega_personal.",
+              "type": "object",
+              "properties": {
+                "first_name": {
+                  "type": "string"
+                },
+                "last_name": {
+                  "type": "string"
+                },
+                "phone": {
+                  "type": "string"
+                },
+                "place": {
+                  "type": "string"
+                },
+                "delivery_date": {
+                  "type": "string"
+                },
+                "delivery_time": {
+                  "type": "string"
+                },
+                "instructions": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "required": [
+            "customer_id",
+            "items"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "update_order_meta",
+        "title": "Cambiar prioridad o fecha de entrega",
+        "description": "Ajusta la prioridad y/o la fecha comprometida de entrega de un pedido de Cookies Moon.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "folio": {
+              "description": "Folio del pedido, por ejemplo CM-2026-0007.",
+              "type": "string"
+            },
+            "order_id": {
+              "description": "Identificador interno del pedido.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "priority": {
+              "description": "Nueva prioridad del pedido.",
+              "type": "string",
+              "enum": [
+                "baja",
+                "normal",
+                "alta",
+                "urgente"
+              ]
+            },
+            "due_date": {
+              "description": "Fecha de entrega en formato AAAA-MM-DD.",
+              "type": "string"
+            }
+          }
+        },
+        "outputSchema": null
       }
     ]
   }
