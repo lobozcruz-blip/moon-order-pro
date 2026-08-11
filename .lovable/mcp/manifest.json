@@ -587,6 +587,204 @@
           }
         },
         "outputSchema": null
+      },
+      {
+        "name": "create_product",
+        "title": "Crear producto",
+        "description": "Creates a single product in the Cookies Moon catalog. For CORTADORES, do not provide a price because cutter pricing is determined later by size and modality. Automatically generates an SKU when none is provided. If the user asks for two or more products, use bulk_create_products instead.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Nombre del producto."
+            },
+            "category": {
+              "type": "string",
+              "enum": [
+                "CORTADORES",
+                "STENCILS",
+                "CAJAS",
+                "OTROS"
+              ],
+              "description": "Categoría del producto."
+            },
+            "themes": {
+              "description": "Temáticas, por ejemplo [\"Navidad\"].",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "sku": {
+              "description": "SKU manual; si se omite se genera automáticamente.",
+              "type": "string"
+            },
+            "base_price": {
+              "description": "Precio base; obligatorio salvo para CORTADORES.",
+              "type": "number",
+              "minimum": 0
+            },
+            "description": {
+              "type": "string"
+            },
+            "manufacturing_notes": {
+              "type": "string"
+            },
+            "active": {
+              "description": "Producto activo (por defecto true).",
+              "type": "boolean"
+            },
+            "create_missing_themes": {
+              "description": "Crear la temática si no existe (por defecto false).",
+              "type": "boolean"
+            },
+            "duplicate_name_strategy": {
+              "type": "string",
+              "enum": [
+                "allow",
+                "warn",
+                "reject"
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "category"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "bulk_create_products",
+        "title": "Crear productos en masa",
+        "description": "Creates multiple Cookies Moon catalog products in a single operation. USE THIS TOOL WHEN THE USER REQUESTS MULTIPLE PRODUCTS (two or more) instead of calling create_product repeatedly. Supports shared defaults such as category and themes, and automatically generates a unique SKU for every product when none is provided (COR-, STE-, CAJ-, OTR-). For CORTADORES do not provide a price: cutter pricing is determined later by size and modality. Returns each created product with its assigned SKU, plus per-item errors for partial failures.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "defaults": {
+              "description": "Valores aplicados a todos los productos de la lista.",
+              "type": "object",
+              "properties": {
+                "category": {
+                  "type": "string",
+                  "enum": [
+                    "CORTADORES",
+                    "STENCILS",
+                    "CAJAS",
+                    "OTROS"
+                  ]
+                },
+                "themes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "base_price": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "description": {
+                  "type": "string"
+                },
+                "manufacturing_notes": {
+                  "type": "string"
+                },
+                "active": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "products": {
+              "minItems": 1,
+              "maxItems": 500,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Nombre del producto."
+                  },
+                  "category": {
+                    "description": "Categoría (si no, se toma de defaults).",
+                    "type": "string",
+                    "enum": [
+                      "CORTADORES",
+                      "STENCILS",
+                      "CAJAS",
+                      "OTROS"
+                    ]
+                  },
+                  "themes": {
+                    "description": "Temáticas del producto.",
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "sku": {
+                    "description": "SKU manual; si se omite se genera automáticamente.",
+                    "type": "string"
+                  },
+                  "base_price": {
+                    "description": "Precio base. No aplica para CORTADORES (su precio depende de modalidad y tamaño).",
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "manufacturing_notes": {
+                    "type": "string"
+                  },
+                  "active": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "description": "Lista de productos a crear (máximo 500 por llamada)."
+            },
+            "create_missing_themes": {
+              "description": "Crear automáticamente las temáticas que no existan (por defecto false).",
+              "type": "boolean"
+            },
+            "duplicate_name_strategy": {
+              "description": "Qué hacer si ya existe un producto con el mismo nombre (por defecto warn).",
+              "type": "string",
+              "enum": [
+                "allow",
+                "warn",
+                "reject"
+              ]
+            }
+          },
+          "required": [
+            "products"
+          ]
+        },
+        "outputSchema": null
       }
     ]
   }

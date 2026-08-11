@@ -1062,6 +1062,7 @@ export type Database = {
     }
     Functions: {
       assign_folio: { Args: { _order_id: string }; Returns: string }
+      create_products_bulk: { Args: { payload: Json }; Returns: Json }
       ensure_profile: {
         Args: { _full_name?: string }
         Returns: {
@@ -1080,6 +1081,10 @@ export type Database = {
       is_client: { Args: never; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
       my_customer_id: { Args: never; Returns: string }
+      next_product_sku: {
+        Args: { _category: Database["public"]["Enums"]["product_category"] }
+        Returns: string
+      }
       owns_order: { Args: { _order_id: string }; Returns: boolean }
       place_client_order: { Args: { payload: Json }; Returns: string }
       place_staff_order: { Args: { payload: Json }; Returns: string }

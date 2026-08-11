@@ -847,8 +847,6 @@ function NuevoPedido() {
                             onValueChange={(v) => {
                               const newCat = v as Category;
                               const isCutter = newCat === "CORTADORES";
-                              const nextMod = prev => prev.cutter_modality ?? lastModality;
-                              const nextSz = prev => prev.cutter_size_cm ?? lastSize;
                               const autoPrice = isCutter ? priceFor(rules, draftItem.cutter_modality ?? lastModality, draftItem.cutter_size_cm ?? lastSize) : 0;
                               setDraftPriceInput(String(autoPrice));
                               setDraftItem((prev) => ({
