@@ -581,7 +581,7 @@ function NuevoPedido() {
           unit_price: computedPrice(it),
           subtotal: computedPrice(it) * it.quantity,
           image_path: it.product_id
-            ? products.find((p) => p.id === it.product_id)?.product_images?.[0]?.storage_path
+            ? (products.find((p) => p.id === it.product_id)?.product_images?.[0]?.storage_path ?? null)
             : null,
         })),
         subtotal,
