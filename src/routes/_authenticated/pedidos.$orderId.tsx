@@ -385,27 +385,27 @@ function DetallePedido() {
       first_name: order.customers?.first_name || "Cliente",
       last_name: order.customers?.last_name || null,
       phone: order.customers?.phone || null,
-      email: order.customers?.email || null,
+      email: null,
     },
     delivery: {
       type: (order.delivery_type as any) ?? "envio",
-      street: order.shipping_details?.street,
-      ext_number: order.shipping_details?.ext_number,
-      int_number: order.shipping_details?.int_number,
-      neighborhood: order.shipping_details?.neighborhood,
-      postal_code: order.shipping_details?.postal_code,
-      city: order.shipping_details?.city,
-      municipality: order.shipping_details?.municipality,
-      state: order.shipping_details?.state,
-      references_text: order.shipping_details?.references_text,
-      carrier: order.shipping_details?.carrier,
-      tracking_number: order.shipping_details?.tracking_number,
+      street: order.shipping_details?.street ?? null,
+      ext_number: order.shipping_details?.ext_number ?? null,
+      int_number: order.shipping_details?.int_number ?? null,
+      neighborhood: order.shipping_details?.neighborhood ?? null,
+      postal_code: order.shipping_details?.postal_code ?? null,
+      city: order.shipping_details?.city ?? null,
+      municipality: order.shipping_details?.municipality ?? null,
+      state: order.shipping_details?.state ?? null,
+      references_text: order.shipping_details?.references_text ?? null,
+      carrier: order.shipping_details?.carrier ?? null,
+      tracking_number: order.shipping_details?.tracking_number ?? null,
       shipping_cost: Number(order.shipping_details?.shipping_cost || order.shipping_cost || 0),
-      special_instructions: order.shipping_details?.special_instructions,
-      place: order.personal_delivery_details?.place,
-      delivery_date: order.personal_delivery_details?.delivery_date,
-      delivery_time: order.personal_delivery_details?.delivery_time,
-      instructions: order.personal_delivery_details?.instructions,
+      special_instructions: order.shipping_details?.special_instructions ?? null,
+      place: order.personal_delivery_details?.place ?? null,
+      delivery_date: order.personal_delivery_details?.delivery_date ?? null,
+      delivery_time: order.personal_delivery_details?.delivery_time ?? null,
+      instructions: order.personal_delivery_details?.instructions ?? null,
     },
     items: (order.order_items ?? []).map((it: any) => ({
       id: it.id,
@@ -746,8 +746,8 @@ function DetallePedido() {
                 </SelectTrigger>
                 <SelectContent>
                   {ORDER_STATUSES.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>
-                      {s.label}
+                    <SelectItem key={s} value={s}>
+                      {STATUS_META[s].label}
                     </SelectItem>
                   ))}
                 </SelectContent>
