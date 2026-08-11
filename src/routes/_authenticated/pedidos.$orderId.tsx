@@ -46,6 +46,7 @@ import {
   whatsappLink,
   type OrderStatus,
   type Priority,
+  type Modality,
 } from "@/lib/cm";
 import { uploadFile, logActivity } from "@/lib/storage";
 import { StoredImage, type ImgRef } from "@/components/StoredImage";
