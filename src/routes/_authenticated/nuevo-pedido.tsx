@@ -194,6 +194,8 @@ function NuevoPedido() {
   const [draftItem, setDraftItem] = useState<Item>(() =>
     createEmptyDraft("CORTADORES", "cutter_only", 8),
   );
+  // Modo artículo manual / personalizado (sin catálogo)
+  const [manualMode, setManualMode] = useState(false);
 
   // 4. Diálogo de edición para productos ya confirmados
   const [editingItem, setEditingItem] = useState<Item | null>(null);
@@ -241,6 +243,7 @@ function NuevoPedido() {
   const handleProductSelect = (p: any | null) => {
     if (!p) {
       // Modo manual
+      setManualMode(true);
       setDraftItem((prev) => ({
         ...prev,
         product_id: null,
@@ -254,6 +257,7 @@ function NuevoPedido() {
       return;
     }
 
+    setManualMode(false);
     const isCutter = p.category === "CORTADORES";
     const img = (p.product_images ?? []).find((i: any) => i.is_primary) ?? p.product_images?.[0];
 
@@ -337,6 +341,7 @@ function NuevoPedido() {
     const nextModality = draftItem.cutter_modality || lastModality;
     const nextSize = draftItem.cutter_size_cm || lastSize;
 
+    setManualMode(false);
     setDraftItem(createEmptyDraft(draftItem.category, nextModality, nextSize));
 
     // 2. Limpiar texto de búsqueda
@@ -425,6 +430,7 @@ function NuevoPedido() {
     setDiscount("0");
     setNote("");
     setItems([]);
+    setManualMode(false);
     setDraftItem(createEmptyDraft("CORTADORES", lastModality, lastSize));
     setSearchQuery("");
     setShowSuccessDialog(false);
@@ -749,12 +755,12 @@ function NuevoPedido() {
               onKeyDown={handleKeyDownOnDraft}
               className={cn(
                 "rounded-xl border p-4 transition-all",
-                draftItem.product_name || draftItem.product_id !== null
+                manualMode || draftItem.product_name || draftItem.product_id !== null
                   ? "border-primary/60 bg-secondary/60 shadow-sm ring-1 ring-primary/20"
                   : "border-dashed border-border bg-card/40",
               )}
             >
-              {draftItem.product_id !== null || draftItem.product_name ? (
+              {manualMode || draftItem.product_id !== null || draftItem.product_name ? (
                 <div className="space-y-4">
                   {/* Encabezado del producto seleccionado */}
                   <div className="flex items-center gap-3 border-b border-border/60 pb-3">
@@ -793,7 +799,8 @@ function NuevoPedido() {
 
                     <button
                       type="button"
-                      onClick={() =>
+                      onClick={() => {
+                        setManualMode(false);
                         setDraftItem(
                           createEmptyDraft(
                             draftItem.category,
