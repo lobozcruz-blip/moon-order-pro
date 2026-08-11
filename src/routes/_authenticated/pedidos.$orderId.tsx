@@ -1304,14 +1304,57 @@ function Pagos({ order, onChange }: { order: OrderData; onChange: () => void }) 
     }
   };
 
+  const currentBalance = Math.max(0, Number(order.balance ?? (order.total - (order.paid_amount || 0))));
+  const halfDeposit = Math.round(Number(order.total || 0) / 2);
+
   return (
     <div className="space-y-4">
       <div className="panel p-4">
-        <h3 className="mb-3 font-display text-lg">Registrar pago</h3>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-display text-lg">Registrar pago</h3>
+          {currentBalance <= 0 ? (
+            <span className="chip bg-emerald-500/15 text-emerald-500 font-bold text-xs">
+              ✓ Pedido 100% pagado
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              Saldo pendiente: <strong className="text-foreground">{money(currentBalance)}</strong>
+            </span>
+          )}
+        </div>
+
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label>Monto</Label>
-            <Input className="tap" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <div className="flex items-center justify-between">
+              <Label>Monto</Label>
+              {currentBalance > 0 && (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setAmount(String(currentBalance))}
+                    className="chip text-[10px] py-0 px-1.5 bg-primary/10 text-primary font-bold hover:bg-primary/20 transition-colors"
+                  >
+                    ⚡ Liquidar ({money(currentBalance)})
+                  </button>
+                  {Number(order.paid_amount || 0) === 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setAmount(String(halfDeposit))}
+                      className="chip text-[10px] py-0 px-1.5 bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      50% ({money(halfDeposit)})
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+            <Input
+              className="tap"
+              inputMode="decimal"
+              placeholder={`Ej. ${currentBalance > 0 ? currentBalance : "0"}`}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
           </div>
           <div className="space-y-2">
             <Label>Método</Label>

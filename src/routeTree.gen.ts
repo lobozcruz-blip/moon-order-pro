@@ -21,6 +21,7 @@ import { Route as AuthenticatedImportacionesRouteImport } from './routes/_authen
 import { Route as AuthenticatedNuevoPedidoRouteImport } from './routes/_authenticated/nuevo-pedido'
 import { Route as AuthenticatedPanelRouteImport } from './routes/_authenticated/panel'
 import { Route as AuthenticatedProductosRouteImport } from './routes/_authenticated/productos'
+import { Route as AuthenticatedTallerRouteImport } from './routes/_authenticated/taller'
 import { Route as TiendaIndexRouteImport } from './routes/tienda.index'
 import { Route as TiendaAccesoRouteImport } from './routes/tienda.acceso'
 import { Route as TiendaCarritoRouteImport } from './routes/tienda.carrito'
@@ -96,6 +97,11 @@ const AuthenticatedProductosRoute = AuthenticatedProductosRouteImport.update({
   path: '/productos',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedTallerRoute = AuthenticatedTallerRouteImport.update({
+  id: '/taller',
+  path: '/taller',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const TiendaIndexRoute = TiendaIndexRouteImport.update({
   id: '/tienda/',
   path: '/tienda/',
@@ -163,6 +169,7 @@ export interface FileRoutesByFullPath {
   '/nuevo-pedido': typeof AuthenticatedNuevoPedidoRoute
   '/panel': typeof AuthenticatedPanelRoute
   '/productos': typeof AuthenticatedProductosRoute
+  '/taller': typeof AuthenticatedTallerRoute
   '/tienda/acceso': typeof TiendaAccesoRoute
   '/tienda/carrito': typeof TiendaCarritoRoute
   '/tienda/pedidos': typeof TiendaPedidosRoute
@@ -186,6 +193,7 @@ export interface FileRoutesByTo {
   '/nuevo-pedido': typeof AuthenticatedNuevoPedidoRoute
   '/panel': typeof AuthenticatedPanelRoute
   '/productos': typeof AuthenticatedProductosRoute
+  '/taller': typeof AuthenticatedTallerRoute
   '/tienda/acceso': typeof TiendaAccesoRoute
   '/tienda/carrito': typeof TiendaCarritoRoute
   '/tienda/pedidos': typeof TiendaPedidosRoute
@@ -211,6 +219,7 @@ export interface FileRoutesById {
   '/_authenticated/nuevo-pedido': typeof AuthenticatedNuevoPedidoRoute
   '/_authenticated/panel': typeof AuthenticatedPanelRoute
   '/_authenticated/productos': typeof AuthenticatedProductosRoute
+  '/_authenticated/taller': typeof AuthenticatedTallerRoute
   '/tienda/acceso': typeof TiendaAccesoRoute
   '/tienda/carrito': typeof TiendaCarritoRoute
   '/tienda/pedidos': typeof TiendaPedidosRoute
@@ -236,6 +245,7 @@ export interface FileRouteTypes {
     | '/nuevo-pedido'
     | '/panel'
     | '/productos'
+    | '/taller'
     | '/tienda/acceso'
     | '/tienda/carrito'
     | '/tienda/pedidos'
@@ -259,6 +269,7 @@ export interface FileRouteTypes {
     | '/nuevo-pedido'
     | '/panel'
     | '/productos'
+    | '/taller'
     | '/tienda/acceso'
     | '/tienda/carrito'
     | '/tienda/pedidos'
@@ -283,6 +294,7 @@ export interface FileRouteTypes {
     | '/_authenticated/nuevo-pedido'
     | '/_authenticated/panel'
     | '/_authenticated/productos'
+    | '/_authenticated/taller'
     | '/tienda/acceso'
     | '/tienda/carrito'
     | '/tienda/pedidos'
@@ -397,6 +409,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProductosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/taller': {
+      id: '/_authenticated/taller'
+      path: '/taller'
+      fullPath: '/taller'
+      preLoaderRoute: typeof AuthenticatedTallerRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/tienda/': {
       id: '/tienda/'
       path: '/tienda'
@@ -477,6 +496,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedNuevoPedidoRoute: typeof AuthenticatedNuevoPedidoRoute
   AuthenticatedPanelRoute: typeof AuthenticatedPanelRoute
   AuthenticatedProductosRoute: typeof AuthenticatedProductosRoute
+  AuthenticatedTallerRoute: typeof AuthenticatedTallerRoute
   AuthenticatedPedidosOrderIdRoute: typeof AuthenticatedPedidosOrderIdRoute
   AuthenticatedPedidosPendientesRoute: typeof AuthenticatedPedidosPendientesRoute
   AuthenticatedPedidosIndexRoute: typeof AuthenticatedPedidosIndexRoute
@@ -489,6 +509,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedNuevoPedidoRoute: AuthenticatedNuevoPedidoRoute,
   AuthenticatedPanelRoute: AuthenticatedPanelRoute,
   AuthenticatedProductosRoute: AuthenticatedProductosRoute,
+  AuthenticatedTallerRoute: AuthenticatedTallerRoute,
   AuthenticatedPedidosOrderIdRoute: AuthenticatedPedidosOrderIdRoute,
   AuthenticatedPedidosPendientesRoute: AuthenticatedPedidosPendientesRoute,
   AuthenticatedPedidosIndexRoute: AuthenticatedPedidosIndexRoute,

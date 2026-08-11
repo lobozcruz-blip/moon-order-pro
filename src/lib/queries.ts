@@ -239,3 +239,43 @@ export async function nextSku(category: Category) {
   const n = parseInt(last.split("-")[1] ?? "0", 10) + 1;
   return `${prefix}-${String(n).padStart(4, "0")}`;
 }
+
+export function useProductionQueue() {
+  return useQuery({
+    queryKey: ["production-queue"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("order_items")
+        .select(
+          `
+          id,
+          order_id,
+          category,
+          product_id,
+          product_name,
+          product_sku,
+          quantity,
+          done_quantity,
+          is_done,
+          done_at,
+          cutter_modality,
+          cutter_size_cm,
+          notes,
+          order_item_images(id, storage_path),
+          products(id, sku, name, category, product_images(id, storage_path, external_url, is_primary), product_theme_links(theme_id, product_themes(id, name))),
+          orders!inner(id, folio, priority, status, due_date, review_status, is_draft, customers(id, first_name, last_name))
+        `,
+        )
+        .eq("orders.is_draft", false)
+        .neq("orders.review_status", "pendiente")
+        .neq("orders.status", "cancelado")
+        .neq("orders.status", "entregado")
+        .order("orders(due_date)", { ascending: true, nullsFirst: false });
+
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 10_000,
+  });
+}
+
