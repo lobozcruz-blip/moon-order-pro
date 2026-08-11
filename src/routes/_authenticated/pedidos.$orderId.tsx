@@ -10,6 +10,7 @@ import {
   Paperclip,
   Truck,
   MapPin,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/AppShell";
