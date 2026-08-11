@@ -13,7 +13,7 @@ import {
   Sparkles,
   Pencil,
   Package,
-  Tag,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/AppShell";
@@ -75,7 +75,7 @@ import { uploadFile, logActivity } from "@/lib/storage";
 import { StoredImage, type ImgRef } from "@/components/StoredImage";
 import { ImageViewer } from "@/components/ImageViewer";
 import { CustomerOrderSummaryModal, type SummaryOrderData } from "@/components/CustomerOrderSummaryModal";
-import { ShippingLabelModal, type ShippingLabelData } from "@/components/ShippingLabelModal";
+import { OrderPrintSheetModal, type OrderPrintSheetData } from "@/components/OrderPrintSheetModal";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/pedidos/$orderId")({
@@ -102,7 +102,7 @@ function DetallePedido() {
   const { isAdmin } = useAuth();
   const [viewer, setViewer] = useState<{ images: ImgRef[]; title: string } | null>(null);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
-  const [showShippingLabelModal, setShowShippingLabelModal] = useState(false);
+  const [showPrintSheetModal, setShowPrintSheetModal] = useState(false);
 
   // Estados para AÑADIR artículo
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -373,54 +373,65 @@ function DetallePedido() {
     is_paid: (order.balance ?? (order.total - (order.paid_amount || 0))) <= 0,
   };
 
-  const shippingLabelData: ShippingLabelData = {
+  const printSheetData: OrderPrintSheetData = {
+    id: order.id,
     folio: order.folio ?? "Pedido",
     created_at: order.created_at,
-    delivery_type: (order.delivery_type as any) ?? "envio",
-    recipient:
-      order.delivery_type === "envio" && order.shipping_details
-        ? {
-            first_name: order.shipping_details.first_name || order.customers?.first_name || "Cliente",
-            last_name: order.shipping_details.last_name || order.customers?.last_name || null,
-            phone: order.shipping_details.phone || order.customers?.phone || null,
-            street: order.shipping_details.street,
-            ext_number: order.shipping_details.ext_number,
-            int_number: order.shipping_details.int_number,
-            neighborhood: order.shipping_details.neighborhood,
-            postal_code: order.shipping_details.postal_code,
-            city: order.shipping_details.city,
-            municipality: order.shipping_details.municipality,
-            state: order.shipping_details.state,
-            references_text: order.shipping_details.references_text,
-            carrier: order.shipping_details.carrier,
-            tracking_number: order.shipping_details.tracking_number,
-            special_instructions: order.shipping_details.special_instructions,
-          }
-        : {
-            first_name:
-              order.personal_delivery_details?.first_name ||
-              order.customers?.first_name ||
-              "Cliente",
-            last_name:
-              order.personal_delivery_details?.last_name ||
-              order.customers?.last_name ||
-              null,
-            phone:
-              order.personal_delivery_details?.phone ||
-              order.customers?.phone ||
-              null,
-            place: order.personal_delivery_details?.place,
-            delivery_date: order.personal_delivery_details?.delivery_date,
-            delivery_time: order.personal_delivery_details?.delivery_time,
-            instructions: order.personal_delivery_details?.instructions,
-          },
+    due_date: order.due_date,
+    priority: order.priority ?? "normal",
+    status: order.status ?? "en_espera",
+    client_notes: order.client_notes,
+    customer: {
+      first_name: order.customers?.first_name || "Cliente",
+      last_name: order.customers?.last_name || null,
+      phone: order.customers?.phone || null,
+      email: order.customers?.email || null,
+    },
+    delivery: {
+      type: (order.delivery_type as any) ?? "envio",
+      street: order.shipping_details?.street,
+      ext_number: order.shipping_details?.ext_number,
+      int_number: order.shipping_details?.int_number,
+      neighborhood: order.shipping_details?.neighborhood,
+      postal_code: order.shipping_details?.postal_code,
+      city: order.shipping_details?.city,
+      municipality: order.shipping_details?.municipality,
+      state: order.shipping_details?.state,
+      references_text: order.shipping_details?.references_text,
+      carrier: order.shipping_details?.carrier,
+      tracking_number: order.shipping_details?.tracking_number,
+      shipping_cost: Number(order.shipping_details?.shipping_cost || order.shipping_cost || 0),
+      special_instructions: order.shipping_details?.special_instructions,
+      place: order.personal_delivery_details?.place,
+      delivery_date: order.personal_delivery_details?.delivery_date,
+      delivery_time: order.personal_delivery_details?.delivery_time,
+      instructions: order.personal_delivery_details?.instructions,
+    },
     items: (order.order_items ?? []).map((it: any) => ({
+      id: it.id,
       name: it.product_name,
+      sku: it.product_sku || it.products?.sku || null,
       category: it.category,
       quantity: it.quantity,
       cutter_modality: it.cutter_modality as Modality,
       cutter_size_cm: it.cutter_size_cm,
+      unit_price: Number(it.unit_price || 0),
+      subtotal: Number(it.subtotal || it.unit_price * it.quantity),
       notes: it.notes,
+      is_done: it.is_done,
+    })),
+    subtotal: Number(order.subtotal || 0),
+    discount: Number(order.discount || 0),
+    shipping_cost: Number(order.shipping_cost || 0),
+    total: Number(order.total || 0),
+    paid_amount: Number(order.paid_amount || 0),
+    balance: Number(order.balance ?? (order.total - (order.paid_amount || 0))),
+    payments: (order.payments ?? []).map((p: any) => ({
+      id: p.id,
+      amount: Number(p.amount || 0),
+      method: p.method,
+      paid_at: p.paid_at,
+      reference: p.reference,
     })),
   };
 
@@ -500,9 +511,9 @@ function DetallePedido() {
             <Button
               variant="outline"
               className="tap font-medium border-primary/40 hover:bg-primary/10"
-              onClick={() => setShowShippingLabelModal(true)}
+              onClick={() => setShowPrintSheetModal(true)}
             >
-              <Tag className="mr-1.5 h-4 w-4 text-primary" /> Etiqueta de envío
+              <FileText className="mr-1.5 h-4 w-4 text-primary" /> Imprimir pedido (Carta)
             </Button>
             {wa && (
               <Button asChild variant="secondary" className="tap">
@@ -696,7 +707,7 @@ function DetallePedido() {
             </TabsContent>
 
             <TabsContent value="entrega" className="mt-4">
-              <Entrega order={order} onOpenShippingLabel={() => setShowShippingLabelModal(true)} />
+              <Entrega order={order} onPrintOrder={() => setShowPrintSheetModal(true)} />
             </TabsContent>
           </Tabs>
         </div>
@@ -1297,10 +1308,10 @@ function DetallePedido() {
         order={summaryData}
       />
 
-      <ShippingLabelModal
-        open={showShippingLabelModal}
-        onOpenChange={setShowShippingLabelModal}
-        data={shippingLabelData}
+      <OrderPrintSheetModal
+        open={showPrintSheetModal}
+        onOpenChange={setShowPrintSheetModal}
+        order={printSheetData}
       />
     </>
   );
@@ -1609,10 +1620,10 @@ function Notas({
 
 function Entrega({
   order,
-  onOpenShippingLabel,
+  onPrintOrder,
 }: {
   order: OrderData;
-  onOpenShippingLabel: () => void;
+  onPrintOrder?: () => void;
 }) {
   const s = order.shipping_details;
   const d = order.personal_delivery_details;
@@ -1624,14 +1635,16 @@ function Entrega({
           <h3 className="flex items-center gap-2 font-display text-lg">
             <Truck className="h-4 w-4 text-primary" /> Envío por Paquetería
           </h3>
-          <Button
-            size="sm"
-            variant="outline"
-            className="tap text-xs font-semibold border-primary/40 hover:bg-primary/10"
-            onClick={onOpenShippingLabel}
-          >
-            <Tag className="mr-1.5 h-3.5 w-3.5 text-primary" /> Imprimir Etiqueta
-          </Button>
+          {onPrintOrder && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="tap text-xs font-semibold border-primary/40 hover:bg-primary/10"
+              onClick={onPrintOrder}
+            >
+              <FileText className="mr-1.5 h-3.5 w-3.5 text-primary" /> Imprimir Hoja del Pedido
+            </Button>
+          )}
         </div>
 
         <div className="grid gap-1">
@@ -1675,14 +1688,16 @@ function Entrega({
           <h3 className="flex items-center gap-2 font-display text-lg">
             <MapPin className="h-4 w-4 text-primary" /> Entrega personal
           </h3>
-          <Button
-            size="sm"
-            variant="outline"
-            className="tap text-xs font-semibold border-primary/40 hover:bg-primary/10"
-            onClick={onOpenShippingLabel}
-          >
-            <Tag className="mr-1.5 h-3.5 w-3.5 text-primary" /> Remisión de Entrega
-          </Button>
+          {onPrintOrder && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="tap text-xs font-semibold border-primary/40 hover:bg-primary/10"
+              onClick={onPrintOrder}
+            >
+              <FileText className="mr-1.5 h-3.5 w-3.5 text-primary" /> Imprimir Hoja del Pedido
+            </Button>
+          )}
         </div>
 
         <div className="grid gap-1">
