@@ -819,18 +819,47 @@ function NuevoPedido() {
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {/* Modo Manual: campo de nombre si no tiene catálogo */}
                     {!draftItem.product_id && (
-                      <div className="space-y-1 sm:col-span-2 lg:col-span-3">
-                        <Label className="text-xs">Nombre del artículo *</Label>
-                        <Input
-                          className="tap h-9 text-sm"
-                          placeholder="Escribe el nombre del artículo..."
-                          value={draftItem.product_name}
-                          onChange={(e) =>
-                            setDraftItem((prev) => ({ ...prev, product_name: e.target.value }))
-                          }
-                          autoFocus
-                        />
-                      </div>
+                      <>
+                        <div className="space-y-1 sm:col-span-2">
+                          <Label className="text-xs">Nombre del artículo *</Label>
+                          <Input
+                            className="tap h-9 text-sm"
+                            placeholder="Escribe el nombre del artículo..."
+                            value={draftItem.product_name}
+                            onChange={(e) =>
+                              setDraftItem((prev) => ({ ...prev, product_name: e.target.value }))
+                            }
+                            autoFocus
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Categoría</Label>
+                          <Select
+                            value={draftItem.category}
+                            onValueChange={(v) =>
+                              setDraftItem((prev) => ({
+                                ...prev,
+                                category: v as Category,
+                                cutter_modality:
+                                  v === "CORTADORES" ? (prev.cutter_modality ?? lastModality) : null,
+                                cutter_size_cm:
+                                  v === "CORTADORES" ? (prev.cutter_size_cm ?? lastSize) : null,
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="tap h-9 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {CATEGORIES.map((c) => (
+                                <SelectItem key={c} value={c}>
+                                  {CATEGORY_META[c].label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </>
                     )}
 
                     {/* CORTADORES: Modalidad y Tamaño */}
