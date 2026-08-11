@@ -175,7 +175,7 @@ export function useOrder(id: string) {
           `
           *,
           customers(*, customer_addresses(*)),
-          order_items(*, order_item_images(*)),
+          order_items(*, order_item_images(*), products(id, sku, name, category, product_images(id, storage_path, external_url, is_primary, sort_order))),
           shipping_details(*),
           personal_delivery_details(*),
           payments(*, payment_attachments(*)),

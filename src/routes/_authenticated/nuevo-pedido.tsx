@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState, useRef } from "react";
 import {
   Plus,
   Trash2,
@@ -7,15 +7,13 @@ import {
   Search,
   Pencil,
   Copy,
-  Undo2,
   Package,
   Check,
-  AlertCircle,
-  Tag,
   Sparkles,
   ShoppingBag,
-  ArrowRight,
-  CornerDownLeft,
+  Download,
+  Eye,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/AppShell";
@@ -50,13 +48,16 @@ import {
 import { ProductPicker } from "@/components/ProductPicker";
 import { StoredImage } from "@/components/StoredImage";
 import {
+  CustomerOrderSummaryModal,
+  type SummaryOrderData,
+} from "@/components/CustomerOrderSummaryModal";
+import {
   CATEGORIES,
   CATEGORY_META,
   MODALITIES,
   SIZES,
   PRIORITIES,
   CONTACT_CHANNELS,
-  OVERRIDE_REASONS,
   money,
   fullName,
   type Category,
@@ -176,7 +177,7 @@ function NuevoPedido() {
   });
 
   // ==========================================
-  // ESTADO DE ARTÍCULOS (NUEVO CONCEPTO UX)
+  // ESTADO DE ARTÍCULOS (UX ÁGIL)
   // ==========================================
   // 1. Artículos ya confirmados en el pedido (inicia vacío [])
   const [items, setItems] = useState<Item[]>([]);
@@ -197,6 +198,12 @@ function NuevoPedido() {
   // 4. Diálogo de edición para productos ya confirmados
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
+
+  // 5. Diálogos posteriores al guardado exitoso
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [createdOrderSummary, setCreatedOrderSummary] = useState<SummaryOrderData | null>(null);
+  const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
 
   // Filtrado de clientes
   const filteredCustomers = useMemo(() => {
@@ -227,12 +234,6 @@ function NuevoPedido() {
   const shippingCost = deliveryType === "envio" ? Number(shipping.shipping_cost || 0) : 0;
   const total = Math.max(0, subtotal - Number(discount || 0) + shippingCost);
   const totalUnits = items.reduce((a, it) => a + it.quantity, 0);
-
-  // Producto de catálogo actualmente seleccionado en draft
-  const selectedCatalogProduct = useMemo(
-    () => products.find((p) => p.id === draftItem.product_id) ?? null,
-    [products, draftItem.product_id],
-  );
 
   // ==========================================
   // MANEJO DE SELECCIÓN DE PRODUCTO
@@ -405,12 +406,30 @@ function NuevoPedido() {
     toast.success("Artículo actualizado");
   };
 
-  // Atajos de teclado (Enter para añadir si hay producto seleccionado y no estamos en textarea)
+  // Atajos de teclado en el configurador
   const handleKeyDownOnDraft = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey || (e.target as HTMLElement).tagName !== "TEXTAREA")) {
       e.preventDefault();
       addDraftToOrder();
     }
+  };
+
+  // Reiniciar formulario por completo
+  const resetForm = () => {
+    setCustomerId("");
+    setNewCustomer({ first_name: "", last_name: "", phone: "", contact_channel: "WhatsApp" });
+    setCustomerSearch("");
+    setPriority("normal");
+    setDueDate("");
+    setAssignee("");
+    setDiscount("0");
+    setNote("");
+    setItems([]);
+    setDraftItem(createEmptyDraft("CORTADORES", lastModality, lastSize));
+    setSearchQuery("");
+    setShowSuccessDialog(false);
+    setCreatedOrderSummary(null);
+    setCreatedOrderId(null);
   };
 
   // ==========================================
@@ -529,9 +548,56 @@ function NuevoPedido() {
       await supabase.rpc("assign_folio", { _order_id: order.id });
       await logActivity({ action: "Pedido creado", entity: "order", order_id: order.id });
 
-      toast.success("¡Pedido registrado exitosamente!");
+      // Obtener el folio asignado
+      const { data: updatedOrder } = await supabase
+        .from("orders")
+        .select("folio, created_at")
+        .eq("id", order.id)
+        .single();
+
+      const folioAssigned = updatedOrder?.folio ?? "Pedido";
+
+      const clientDisplayName =
+        customerId && customers
+          ? fullName(
+              customers.find((c) => c.id === customerId)?.first_name,
+              customers.find((c) => c.id === customerId)?.last_name,
+            )
+          : fullName(newCustomer.first_name, newCustomer.last_name) || "Cliente";
+
+      const summaryData: SummaryOrderData = {
+        id: order.id,
+        folio: folioAssigned,
+        created_at: updatedOrder?.created_at || new Date().toISOString(),
+        customer_name: clientDisplayName,
+        delivery_type: deliveryType,
+        items: items.map((it) => ({
+          name: it.product_name,
+          sku: it.product_sku,
+          category: it.category,
+          quantity: it.quantity,
+          cutter_modality: it.cutter_modality,
+          cutter_size_cm: it.cutter_size_cm,
+          unit_price: computedPrice(it),
+          subtotal: computedPrice(it) * it.quantity,
+          image_path: it.product_id
+            ? products.find((p) => p.id === it.product_id)?.product_images?.[0]?.storage_path
+            : null,
+        })),
+        subtotal,
+        discount: Number(discount || 0),
+        shipping_cost: shippingCost,
+        total,
+        total_paid: 0,
+        balance: total,
+        is_paid: false,
+      };
+
+      setCreatedOrderSummary(summaryData);
+      setCreatedOrderId(order.id);
+      setShowSuccessDialog(true);
+      toast.success(`¡Pedido ${folioAssigned} registrado exitosamente!`);
       invalidate("orders", "customers", "activity");
-      navigate({ to: "/pedidos/$orderId", params: { orderId: order.id } });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo guardar el pedido");
     } finally {
@@ -678,7 +744,7 @@ function NuevoPedido() {
               className="mb-4"
             />
 
-            {/* CONFIGURADOR DEL PRODUCTO SELECCIONADO (Aparece al seleccionar o modo manual) */}
+            {/* CONFIGURADOR DEL PRODUCTO SELECCIONADO */}
             <div
               onKeyDown={handleKeyDownOnDraft}
               className={cn(
@@ -1481,6 +1547,65 @@ function NuevoPedido() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* DIÁLOGO DE ÉXITO POSTERIOR AL GUARDADO CON ACCIÓN DE RESUMEN */}
+      <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+        <DialogContent className="sm:max-w-md text-center p-6 space-y-4">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-500 shadow-inner">
+            <Check className="h-8 w-8 stroke-[3]" />
+          </div>
+
+          <div className="space-y-1">
+            <DialogTitle className="font-display text-2xl font-bold text-foreground">
+              ¡Pedido creado correctamente!
+            </DialogTitle>
+            <p className="text-base font-mono font-bold text-primary">
+              {createdOrderSummary?.folio}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {createdOrderSummary?.customer_name} · Total: {money(createdOrderSummary?.total ?? 0)}
+            </p>
+          </div>
+
+          <div className="grid gap-2 pt-2">
+            <Button
+              className="tap font-bold h-11 bg-primary text-primary-foreground shadow-md shadow-primary/20 hover:bg-primary/90"
+              onClick={() => setShowSummaryModal(true)}
+            >
+              <Download className="mr-2 h-4 w-4 stroke-[2.5]" /> Descargar resumen para clienta
+            </Button>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                className="tap font-semibold"
+                onClick={() => {
+                  if (createdOrderId) {
+                    navigate({ to: "/pedidos/$orderId", params: { orderId: createdOrderId } });
+                  }
+                }}
+              >
+                <Eye className="mr-1.5 h-4 w-4" /> Ver pedido
+              </Button>
+
+              <Button
+                variant="secondary"
+                className="tap font-semibold"
+                onClick={resetForm}
+              >
+                <RotateCcw className="mr-1.5 h-4 w-4" /> Nuevo pedido
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL DE RESUMEN PARA CLIENTA */}
+      <CustomerOrderSummaryModal
+        open={showSummaryModal}
+        onOpenChange={setShowSummaryModal}
+        order={createdOrderSummary}
+      />
     </>
   );
 }

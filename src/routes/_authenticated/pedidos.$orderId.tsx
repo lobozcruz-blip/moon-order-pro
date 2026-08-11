@@ -49,6 +49,7 @@ import {
 import { uploadFile, logActivity } from "@/lib/storage";
 import { StoredImage, type ImgRef } from "@/components/StoredImage";
 import { ImageViewer } from "@/components/ImageViewer";
+import { CustomerOrderSummaryModal, type SummaryOrderData } from "@/components/CustomerOrderSummaryModal";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/pedidos/$orderId")({
@@ -71,6 +72,7 @@ function DetallePedido() {
   const invalidate = useInvalidate();
   const { isAdmin } = useAuth();
   const [viewer, setViewer] = useState<{ images: ImgRef[]; title: string } | null>(null);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
 
   const refresh = async () => {
     invalidate("order", "orders", "activity");
@@ -84,6 +86,37 @@ function DetallePedido() {
   const doneUnits = items.reduce((a, i) => a + (i.is_done ? i.quantity : i.done_quantity), 0);
   const pct = totalUnits ? Math.round((doneUnits / totalUnits) * 100) : 0;
   const wa = whatsappLink(order.customers?.phone);
+
+  const summaryData: SummaryOrderData = {
+    id: order.id,
+    folio: order.folio ?? "Pedido",
+    created_at: order.created_at,
+    customer_name: fullName(order.customers?.first_name, order.customers?.last_name) || "Cliente",
+    delivery_type: order.delivery_type as any,
+    items: (order.order_items ?? []).map((it: any) => {
+      const customImg = it.order_item_images?.[0]?.storage_path;
+      const prodImg = it.products?.product_images?.[0]?.storage_path;
+      return {
+        id: it.id,
+        name: it.product_name,
+        sku: it.product_sku || it.products?.sku || null,
+        category: it.category,
+        quantity: it.quantity,
+        cutter_modality: it.cutter_modality as Modality,
+        cutter_size_cm: it.cutter_size_cm,
+        unit_price: Number(it.unit_price || 0),
+        subtotal: Number(it.subtotal || it.unit_price * it.quantity),
+        image_path: customImg || prodImg || null,
+      };
+    }),
+    subtotal: Number(order.subtotal || 0),
+    discount: Number(order.discount || 0),
+    shipping_cost: Number(order.shipping_cost || 0),
+    total: Number(order.total || 0),
+    total_paid: Number(order.total_paid || 0),
+    balance: Number(order.balance ?? (order.total - (order.total_paid || 0))),
+    is_paid: (order.balance ?? (order.total - (order.total_paid || 0))) <= 0,
+  };
 
   type OrderPatch = Database["public"]["Tables"]["orders"]["Update"];
 
@@ -150,13 +183,22 @@ function DetallePedido() {
         title={order.folio ?? "Pedido"}
         subtitle={`${fullName(order.customers?.first_name, order.customers?.last_name)} · ${dateTimeFmt(order.created_at)}`}
         action={
-          wa ? (
-            <Button asChild variant="secondary" className="tap">
-              <a href={wa} target="_blank" rel="noreferrer">
-                <MessageCircle className="mr-1 h-4 w-4" /> WhatsApp
-              </a>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              className="tap font-medium border-primary/40 hover:bg-primary/10"
+              onClick={() => setShowSummaryModal(true)}
+            >
+              <Sparkles className="mr-1.5 h-4 w-4 text-primary" /> Resumen para clienta
             </Button>
-          ) : undefined
+            {wa && (
+              <Button asChild variant="secondary" className="tap">
+                <a href={wa} target="_blank" rel="noreferrer">
+                  <MessageCircle className="mr-1 h-4 w-4" /> WhatsApp
+                </a>
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -425,6 +467,12 @@ function DetallePedido() {
         onOpenChange={(v) => !v && setViewer(null)}
         images={viewer?.images ?? []}
         title={viewer?.title ?? "Imágenes"}
+      />
+
+      <CustomerOrderSummaryModal
+        open={showSummaryModal}
+        onOpenChange={setShowSummaryModal}
+        order={summaryData}
       />
     </>
   );
