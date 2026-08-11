@@ -13,6 +13,7 @@ import {
   Sparkles,
   Pencil,
   Package,
+  Tag,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/AppShell";
@@ -74,6 +75,7 @@ import { uploadFile, logActivity } from "@/lib/storage";
 import { StoredImage, type ImgRef } from "@/components/StoredImage";
 import { ImageViewer } from "@/components/ImageViewer";
 import { CustomerOrderSummaryModal, type SummaryOrderData } from "@/components/CustomerOrderSummaryModal";
+import { ShippingLabelModal, type ShippingLabelData } from "@/components/ShippingLabelModal";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/pedidos/$orderId")({
@@ -100,6 +102,7 @@ function DetallePedido() {
   const { isAdmin } = useAuth();
   const [viewer, setViewer] = useState<{ images: ImgRef[]; title: string } | null>(null);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [showShippingLabelModal, setShowShippingLabelModal] = useState(false);
 
   // Estados para AÑADIR artículo
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -370,6 +373,57 @@ function DetallePedido() {
     is_paid: (order.balance ?? (order.total - (order.paid_amount || 0))) <= 0,
   };
 
+  const shippingLabelData: ShippingLabelData = {
+    folio: order.folio ?? "Pedido",
+    created_at: order.created_at,
+    delivery_type: (order.delivery_type as any) ?? "envio",
+    recipient:
+      order.delivery_type === "envio" && order.shipping_details
+        ? {
+            first_name: order.shipping_details.first_name || order.customers?.first_name || "Cliente",
+            last_name: order.shipping_details.last_name || order.customers?.last_name || null,
+            phone: order.shipping_details.phone || order.customers?.phone || null,
+            street: order.shipping_details.street,
+            ext_number: order.shipping_details.ext_number,
+            int_number: order.shipping_details.int_number,
+            neighborhood: order.shipping_details.neighborhood,
+            postal_code: order.shipping_details.postal_code,
+            city: order.shipping_details.city,
+            municipality: order.shipping_details.municipality,
+            state: order.shipping_details.state,
+            references_text: order.shipping_details.references_text,
+            carrier: order.shipping_details.carrier,
+            tracking_number: order.shipping_details.tracking_number,
+            special_instructions: order.shipping_details.special_instructions,
+          }
+        : {
+            first_name:
+              order.personal_delivery_details?.first_name ||
+              order.customers?.first_name ||
+              "Cliente",
+            last_name:
+              order.personal_delivery_details?.last_name ||
+              order.customers?.last_name ||
+              null,
+            phone:
+              order.personal_delivery_details?.phone ||
+              order.customers?.phone ||
+              null,
+            place: order.personal_delivery_details?.place,
+            delivery_date: order.personal_delivery_details?.delivery_date,
+            delivery_time: order.personal_delivery_details?.delivery_time,
+            instructions: order.personal_delivery_details?.instructions,
+          },
+    items: (order.order_items ?? []).map((it: any) => ({
+      name: it.product_name,
+      category: it.category,
+      quantity: it.quantity,
+      cutter_modality: it.cutter_modality as Modality,
+      cutter_size_cm: it.cutter_size_cm,
+      notes: it.notes,
+    })),
+  };
+
   type OrderPatch = Database["public"]["Tables"]["orders"]["Update"];
 
   const patchOrder = async (patch: OrderPatch, label: string) => {
@@ -442,6 +496,13 @@ function DetallePedido() {
               onClick={() => setShowSummaryModal(true)}
             >
               <Sparkles className="mr-1.5 h-4 w-4 text-primary" /> Resumen para clienta
+            </Button>
+            <Button
+              variant="outline"
+              className="tap font-medium border-primary/40 hover:bg-primary/10"
+              onClick={() => setShowShippingLabelModal(true)}
+            >
+              <Tag className="mr-1.5 h-4 w-4 text-primary" /> Etiqueta de envío
             </Button>
             {wa && (
               <Button asChild variant="secondary" className="tap">
@@ -635,7 +696,7 @@ function DetallePedido() {
             </TabsContent>
 
             <TabsContent value="entrega" className="mt-4">
-              <Entrega order={order} />
+              <Entrega order={order} onOpenShippingLabel={() => setShowShippingLabelModal(true)} />
             </TabsContent>
           </Tabs>
         </div>
@@ -1235,6 +1296,12 @@ function DetallePedido() {
         onOpenChange={setShowSummaryModal}
         order={summaryData}
       />
+
+      <ShippingLabelModal
+        open={showShippingLabelModal}
+        onOpenChange={setShowShippingLabelModal}
+        data={shippingLabelData}
+      />
     </>
   );
 }
@@ -1540,52 +1607,99 @@ function Notas({
   );
 }
 
-function Entrega({ order }: { order: OrderData }) {
+function Entrega({
+  order,
+  onOpenShippingLabel,
+}: {
+  order: OrderData;
+  onOpenShippingLabel: () => void;
+}) {
   const s = order.shipping_details;
   const d = order.personal_delivery_details;
 
   if (order.delivery_type === "envio" && s)
     return (
-      <div className="panel space-y-2 p-4 text-sm">
-        <h3 className="flex items-center gap-2 font-display text-lg">
-          <Truck className="h-4 w-4 text-primary" /> Envío
-        </h3>
-        <p>{fullName(s.first_name, s.last_name)}</p>
-        <p className="text-muted-foreground">{s.phone ?? "Sin teléfono"}</p>
-        <p className="text-muted-foreground">
-          {[s.street, s.ext_number, s.int_number && `Int. ${s.int_number}`, s.neighborhood]
-            .filter(Boolean)
-            .join(" ")}
-        </p>
-        <p className="text-muted-foreground">
-          {[s.postal_code, s.city, s.municipality, s.state].filter(Boolean).join(", ")}
-        </p>
-        {s.references_text && <p className="text-muted-foreground">Ref: {s.references_text}</p>}
-        <p>
-          Paquetería: <strong>{s.carrier ?? "—"}</strong> · Guía:{" "}
-          <strong>{s.tracking_number ?? "pendiente"}</strong>
-        </p>
-        <p className="text-muted-foreground">Costo de envío: {money(s.shipping_cost)}</p>
-        {s.special_instructions && (
-          <p className="text-muted-foreground">Instrucciones: {s.special_instructions}</p>
-        )}
-        <p className="text-muted-foreground">Fecha estimada: {dateFmt(s.estimated_ship_date)}</p>
+      <div className="panel space-y-3 p-4 text-sm">
+        <div className="flex items-center justify-between border-b border-border pb-2">
+          <h3 className="flex items-center gap-2 font-display text-lg">
+            <Truck className="h-4 w-4 text-primary" /> Envío por Paquetería
+          </h3>
+          <Button
+            size="sm"
+            variant="outline"
+            className="tap text-xs font-semibold border-primary/40 hover:bg-primary/10"
+            onClick={onOpenShippingLabel}
+          >
+            <Tag className="mr-1.5 h-3.5 w-3.5 text-primary" /> Imprimir Etiqueta
+          </Button>
+        </div>
+
+        <div className="grid gap-1">
+          <p className="font-semibold text-foreground text-base">
+            {fullName(s.first_name, s.last_name)}
+          </p>
+          <p className="text-muted-foreground font-mono">{s.phone ?? "Sin teléfono"}</p>
+          <p className="text-foreground">
+            {[s.street, s.ext_number && `#${s.ext_number}`, s.int_number && `Int. ${s.int_number}`, s.neighborhood]
+              .filter(Boolean)
+              .join(" ")}
+          </p>
+          <p className="text-muted-foreground font-semibold">
+            {[s.postal_code && `C.P. ${s.postal_code}`, s.city, s.municipality, s.state].filter(Boolean).join(", ")}
+          </p>
+          {s.references_text && (
+            <p className="text-xs text-amber-600 dark:text-amber-300 bg-amber-500/10 p-2 rounded mt-1">
+              <strong>Ref:</strong> {s.references_text}
+            </p>
+          )}
+        </div>
+
+        <div className="border-t border-border pt-2 grid gap-1 text-xs text-muted-foreground">
+          <p>
+            Paquetería: <strong className="text-foreground">{s.carrier ?? "—"}</strong> · Guía:{" "}
+            <strong className="text-foreground font-mono">{s.tracking_number ?? "pendiente"}</strong>
+          </p>
+          <p>Costo de envío: <strong className="text-foreground">{money(s.shipping_cost)}</strong></p>
+          {s.special_instructions && (
+            <p>Instrucciones: {s.special_instructions}</p>
+          )}
+          <p>Fecha estimada de despacho: {dateFmt(s.estimated_ship_date)}</p>
+        </div>
       </div>
     );
 
   if (d)
     return (
-      <div className="panel space-y-2 p-4 text-sm">
-        <h3 className="flex items-center gap-2 font-display text-lg">
-          <MapPin className="h-4 w-4 text-primary" /> Entrega personal
-        </h3>
-        <p>{fullName(d.first_name, d.last_name)}</p>
-        <p className="text-muted-foreground">{d.phone ?? "Sin teléfono"}</p>
-        <p className="text-muted-foreground">Lugar: {d.place ?? "—"}</p>
-        <p className="text-muted-foreground">
-          {dateFmt(d.delivery_date)} {d.delivery_time ?? ""}
-        </p>
-        {d.instructions && <p className="text-muted-foreground">{d.instructions}</p>}
+      <div className="panel space-y-3 p-4 text-sm">
+        <div className="flex items-center justify-between border-b border-border pb-2">
+          <h3 className="flex items-center gap-2 font-display text-lg">
+            <MapPin className="h-4 w-4 text-primary" /> Entrega personal
+          </h3>
+          <Button
+            size="sm"
+            variant="outline"
+            className="tap text-xs font-semibold border-primary/40 hover:bg-primary/10"
+            onClick={onOpenShippingLabel}
+          >
+            <Tag className="mr-1.5 h-3.5 w-3.5 text-primary" /> Remisión de Entrega
+          </Button>
+        </div>
+
+        <div className="grid gap-1">
+          <p className="font-semibold text-foreground text-base">
+            {fullName(d.first_name, d.last_name)}
+          </p>
+          <p className="text-muted-foreground font-mono">{d.phone ?? "Sin teléfono"}</p>
+          <p className="text-foreground">📍 Lugar: <strong className="text-foreground">{d.place ?? "—"}</strong></p>
+          <p className="text-muted-foreground">
+            📅 Fecha: {dateFmt(d.delivery_date)} {d.delivery_time ? `· ⏰ ${d.delivery_time}` : ""}
+          </p>
+          {d.instructions && (
+            <p className="text-xs text-amber-600 dark:text-amber-300 bg-amber-500/10 p-2 rounded mt-1">
+              <strong>Nota:</strong> {d.instructions}
+            </p>
+          )}
+        </div>
       </div>
     );
 
