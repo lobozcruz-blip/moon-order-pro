@@ -40,5 +40,7 @@ export default defineMcp({
     upsertCustomerTool,
     createOrderTool,
     updateOrderMetaTool,
+    createProductTool,
+    bulkCreateProductsTool,
   ] as unknown as Parameters<typeof defineMcp>[0]["tools"],
 });
