@@ -10,6 +10,8 @@ import updateItemProgressTool from "./tools/update-item-progress";
 import upsertCustomerTool from "./tools/upsert-customer";
 import createOrderTool from "./tools/create-order";
 import updateOrderMetaTool from "./tools/update-order-meta";
+import createProductTool from "./tools/create-product";
+import bulkCreateProductsTool from "./tools/bulk-create-products";
 
 // El emisor OAuth debe ser el host directo de Supabase; sólo la referencia del
 // proyecto sobrevive intacta al publicar.
