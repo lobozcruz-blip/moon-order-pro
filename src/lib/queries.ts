@@ -245,37 +245,76 @@ export function useProductionQueue() {
     queryKey: ["production-queue"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("order_items")
+        .from("orders")
         .select(
           `
           id,
-          order_id,
-          category,
-          product_id,
-          product_name,
-          product_sku,
-          quantity,
-          done_quantity,
-          is_done,
-          done_at,
-          cutter_modality,
-          cutter_size_cm,
-          notes,
-          order_item_images(id, storage_path),
-          products(id, sku, name, category, product_images(id, storage_path, external_url, is_primary), product_theme_links(theme_id, product_themes(id, name))),
-          orders!inner(id, folio, priority, status, due_date, review_status, is_draft, customers(id, first_name, last_name))
+          folio,
+          priority,
+          status,
+          due_date,
+          review_status,
+          is_draft,
+          created_at,
+          customers(id, first_name, last_name, phone),
+          order_items(
+            id,
+            order_id,
+            category,
+            product_id,
+            product_name,
+            product_sku,
+            quantity,
+            done_quantity,
+            is_done,
+            done_at,
+            cutter_modality,
+            cutter_size_cm,
+            notes,
+            order_item_images(id, storage_path),
+            products(
+              id,
+              sku,
+              name,
+              category,
+              product_images(id, storage_path, external_url, is_primary),
+              product_theme_links(theme_id, product_themes(id, name))
+            )
+          )
         `,
         )
-        .eq("orders.is_draft", false)
-        .neq("orders.review_status", "pendiente")
-        .neq("orders.status", "cancelado")
-        .neq("orders.status", "entregado")
-        .order("orders(due_date)", { ascending: true, nullsFirst: false });
+        .eq("is_draft", false)
+        .neq("status", "cancelado")
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return data ?? [];
+
+      const queueItems: any[] = [];
+      for (const order of data ?? []) {
+        if (order.review_status === "pendiente") continue;
+
+        const parentOrder = {
+          id: order.id,
+          folio: order.folio,
+          priority: order.priority,
+          status: order.status,
+          due_date: order.due_date,
+          created_at: order.created_at,
+          customers: order.customers,
+        };
+
+        for (const item of order.order_items ?? []) {
+          queueItems.push({
+            ...item,
+            orders: parentOrder,
+          });
+        }
+      }
+
+      return queueItems;
     },
     staleTime: 10_000,
   });
 }
+
 
