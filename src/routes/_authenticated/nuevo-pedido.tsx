@@ -194,11 +194,13 @@ function NuevoPedido() {
   const [draftItem, setDraftItem] = useState<Item>(() =>
     createEmptyDraft("CORTADORES", "cutter_only", 8),
   );
+  const [draftPriceInput, setDraftPriceInput] = useState<string>("0");
   // Modo artículo manual / personalizado (sin catálogo)
   const [manualMode, setManualMode] = useState(false);
 
   // 4. Diálogo de edición para productos ya confirmados
   const [editingItem, setEditingItem] = useState<Item | null>(null);
+  const [editingPriceInput, setEditingPriceInput] = useState<string>("0");
   const [isEditOpen, setIsEditOpen] = useState(false);
 
   // 5. Diálogos posteriores al guardado exitoso
@@ -233,8 +235,9 @@ function NuevoPedido() {
   const draftSubtotal = draftUnitPrice * draftItem.quantity;
 
   const subtotal = items.reduce((a, it) => a + computedPrice(it) * it.quantity, 0);
-  const shippingCost = deliveryType === "envio" ? Number(shipping.shipping_cost || 0) : 0;
-  const total = Math.max(0, subtotal - Number(discount || 0) + shippingCost);
+  const shippingCost = deliveryType === "envio" ? (parseFloat(String(shipping.shipping_cost || 0).replace(',', '.')) || 0) : 0;
+  const discountNum = parseFloat(String(discount || 0).replace(',', '.')) || 0;
+  const total = Math.max(0, subtotal - discountNum + shippingCost);
   const totalUnits = items.reduce((a, it) => a + it.quantity, 0);
 
   // ==========================================
@@ -244,6 +247,7 @@ function NuevoPedido() {
     if (!p) {
       // Modo manual
       setManualMode(true);
+      setDraftPriceInput("0");
       setDraftItem((prev) => ({
         ...prev,
         product_id: null,
@@ -260,6 +264,8 @@ function NuevoPedido() {
     setManualMode(false);
     const isCutter = p.category === "CORTADORES";
     const img = (p.product_images ?? []).find((i: any) => i.is_primary) ?? p.product_images?.[0];
+    const initialPrice = isCutter ? 0 : Number(p.base_price ?? 0);
+    setDraftPriceInput(String(initialPrice));
 
     setDraftItem((prev) => ({
       ...prev,
@@ -269,7 +275,7 @@ function NuevoPedido() {
       category: p.category,
       cutter_modality: isCutter ? prev.cutter_modality || lastModality : null,
       cutter_size_cm: isCutter ? prev.cutter_size_cm || lastSize : null,
-      unit_price: isCutter ? 0 : Number(p.base_price ?? 0),
+      unit_price: initialPrice,
       price_overridden: false,
       image_preview: img,
     }));
@@ -342,6 +348,7 @@ function NuevoPedido() {
     const nextSize = draftItem.cutter_size_cm || lastSize;
 
     setManualMode(false);
+    setDraftPriceInput("0");
     setDraftItem(createEmptyDraft(draftItem.category, nextModality, nextSize));
 
     // 2. Limpiar texto de búsqueda
@@ -386,6 +393,7 @@ function NuevoPedido() {
 
   const openEditModal = (item: Item) => {
     setEditingItem({ ...item });
+    setEditingPriceInput(String(item.price_overridden ? item.unit_price : computedPrice(item)));
     setIsEditOpen(true);
   };
 
@@ -836,16 +844,22 @@ function NuevoPedido() {
                           <Label className="text-xs">Categoría</Label>
                           <Select
                             value={draftItem.category}
-                            onValueChange={(v) =>
+                            onValueChange={(v) => {
+                              const newCat = v as Category;
+                              const isCutter = newCat === "CORTADORES";
+                              const nextMod = prev => prev.cutter_modality ?? lastModality;
+                              const nextSz = prev => prev.cutter_size_cm ?? lastSize;
+                              const autoPrice = isCutter ? priceFor(rules, draftItem.cutter_modality ?? lastModality, draftItem.cutter_size_cm ?? lastSize) : 0;
+                              setDraftPriceInput(String(autoPrice));
                               setDraftItem((prev) => ({
                                 ...prev,
-                                category: v as Category,
-                                cutter_modality:
-                                  v === "CORTADORES" ? (prev.cutter_modality ?? lastModality) : null,
-                                cutter_size_cm:
-                                  v === "CORTADORES" ? (prev.cutter_size_cm ?? lastSize) : null,
-                              }))
-                            }
+                                category: newCat,
+                                cutter_modality: isCutter ? (prev.cutter_modality ?? lastModality) : null,
+                                cutter_size_cm: isCutter ? (prev.cutter_size_cm ?? lastSize) : null,
+                                unit_price: autoPrice,
+                                price_overridden: false,
+                              }));
+                            }}
                           >
                             <SelectTrigger className="tap h-9 text-xs">
                               <SelectValue />
@@ -869,12 +883,17 @@ function NuevoPedido() {
                           <Label className="text-xs">Modalidad</Label>
                           <Select
                             value={draftItem.cutter_modality ?? "cutter_only"}
-                            onValueChange={(v) =>
+                            onValueChange={(v) => {
+                              const newMod = v as Modality;
+                              const autoPrice = priceFor(rules, newMod, draftItem.cutter_size_cm ?? lastSize);
+                              setDraftPriceInput(String(autoPrice));
                               setDraftItem((prev) => ({
                                 ...prev,
-                                cutter_modality: v as Modality,
-                              }))
-                            }
+                                cutter_modality: newMod,
+                                unit_price: autoPrice,
+                                price_overridden: false,
+                              }));
+                            }}
                           >
                             <SelectTrigger className="tap h-9 text-xs">
                               <SelectValue />
@@ -893,12 +912,17 @@ function NuevoPedido() {
                           <Label className="text-xs">Tamaño</Label>
                           <Select
                             value={String(draftItem.cutter_size_cm ?? 8)}
-                            onValueChange={(v) =>
+                            onValueChange={(v) => {
+                              const newSize = Number(v);
+                              const autoPrice = priceFor(rules, draftItem.cutter_modality ?? lastModality, newSize);
+                              setDraftPriceInput(String(autoPrice));
                               setDraftItem((prev) => ({
                                 ...prev,
-                                cutter_size_cm: Number(v),
-                              }))
-                            }
+                                cutter_size_cm: newSize,
+                                unit_price: autoPrice,
+                                price_overridden: false,
+                              }));
+                            }}
                           >
                             <SelectTrigger className="tap h-9 text-xs">
                               <SelectValue />
@@ -961,18 +985,22 @@ function NuevoPedido() {
                     {/* PRECIO UNITARIO (si no es cortador o si tiene override) */}
                     {draftItem.category !== "CORTADORES" && (
                       <div className="space-y-1">
-                        <Label className="text-xs">Precio unitario</Label>
+                        <Label className="text-xs">Precio unitario ($)</Label>
                         <Input
                           className="tap h-9 text-sm"
                           inputMode="decimal"
-                          value={draftItem.price_overridden ? draftItem.unit_price : draftUnitPrice}
-                          onChange={(e) =>
+                          placeholder="0.00"
+                          value={draftPriceInput}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            setDraftPriceInput(raw);
+                            const parsed = parseFloat(raw.replace(',', '.')) || 0;
                             setDraftItem((prev) => ({
                               ...prev,
                               price_overridden: true,
-                              unit_price: Number(e.target.value) || 0,
-                            }))
-                          }
+                              unit_price: parsed,
+                            }));
+                          }}
                         />
                       </div>
                     )}
@@ -1448,9 +1476,17 @@ function NuevoPedido() {
                     <Label className="text-xs">Modalidad</Label>
                     <Select
                       value={editingItem.cutter_modality ?? "cutter_only"}
-                      onValueChange={(v) =>
-                        setEditingItem({ ...editingItem, cutter_modality: v as Modality })
-                      }
+                      onValueChange={(v) => {
+                        const newMod = v as Modality;
+                        const autoPrice = priceFor(rules, newMod, editingItem.cutter_size_cm);
+                        setEditingPriceInput(String(autoPrice));
+                        setEditingItem({
+                          ...editingItem,
+                          cutter_modality: newMod,
+                          unit_price: autoPrice,
+                          price_overridden: false,
+                        });
+                      }}
                     >
                       <SelectTrigger className="tap text-xs">
                         <SelectValue />
@@ -1469,9 +1505,17 @@ function NuevoPedido() {
                     <Label className="text-xs">Tamaño</Label>
                     <Select
                       value={String(editingItem.cutter_size_cm ?? 8)}
-                      onValueChange={(v) =>
-                        setEditingItem({ ...editingItem, cutter_size_cm: Number(v) })
-                      }
+                      onValueChange={(v) => {
+                        const newSize = Number(v);
+                        const autoPrice = priceFor(rules, editingItem.cutter_modality, newSize);
+                        setEditingPriceInput(String(autoPrice));
+                        setEditingItem({
+                          ...editingItem,
+                          cutter_size_cm: newSize,
+                          unit_price: autoPrice,
+                          price_overridden: false,
+                        });
+                      }}
                     >
                       <SelectTrigger className="tap text-xs">
                         <SelectValue />
@@ -1537,14 +1581,18 @@ function NuevoPedido() {
                 <Input
                   className="tap text-sm"
                   inputMode="decimal"
-                  value={editingItem.price_overridden ? editingItem.unit_price : computedPrice(editingItem)}
-                  onChange={(e) =>
+                  placeholder="0.00"
+                  value={editingPriceInput}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    setEditingPriceInput(raw);
+                    const parsed = parseFloat(raw.replace(',', '.')) || 0;
                     setEditingItem({
                       ...editingItem,
                       price_overridden: true,
-                      unit_price: Number(e.target.value) || 0,
-                    })
-                  }
+                      unit_price: parsed,
+                    });
+                  }}
                 />
               </div>
 

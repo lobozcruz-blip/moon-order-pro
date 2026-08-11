@@ -708,7 +708,7 @@ function Precios() {
     try {
       for (const r of rules ?? []) {
         const key = `${r.modality}-${r.size_cm}`;
-        const next = Number(values[key] ?? r.price);
+        const next = parseFloat(String(values[key] ?? r.price).replace(',', '.')) || 0;
         if (next !== Number(r.price)) {
           const { error } = await supabase
             .from("cutter_price_rules")
@@ -737,7 +737,7 @@ function Precios() {
     <div className="panel p-4">
       <h2 className="font-display text-lg">Tabla de precios de cortadores</h2>
       <p className="mb-4 text-xs text-muted-foreground">
-        De 5 a 20 cm. Cambiar un precio no modifica pedidos ya registrados.
+        De 5 a 20 cm. Cambiar un precio no modifica pedidos ya registrados. Admite decimales (ej. 45.50).
       </p>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -763,11 +763,12 @@ function Precios() {
                         <Input
                           className="tap h-10 w-28"
                           inputMode="decimal"
+                          placeholder="0.00"
                           value={values[key] ?? ""}
                           onChange={(e) => setValues({ ...values, [key]: e.target.value })}
                         />
                       ) : (
-                        money(Number(values[key] ?? 0))
+                        money(parseFloat(String(values[key] ?? 0).replace(',', '.')) || 0)
                       )}
                     </td>
                   );

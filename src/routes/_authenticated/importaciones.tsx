@@ -171,7 +171,9 @@ function Importaciones() {
             description: r.descripcion || null,
             manufacturing_notes: r.notas_fabricacion || null,
             base_price:
-              category === "CORTADORES" ? null : Number(r.precio_base ?? 0) || 0,
+              category === "CORTADORES"
+                ? null
+                : parseFloat(String(r.precio_base ?? 0).replace(',', '.')) || 0,
             active: !["no", "false", "0", "inactivo"].includes(String(r.activo ?? "si").toLowerCase()),
           };
 

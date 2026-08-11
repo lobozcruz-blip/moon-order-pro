@@ -192,7 +192,10 @@ function Productos() {
         category: draft.category,
         description: draft.description.trim() || null,
         manufacturing_notes: draft.manufacturing_notes.trim() || null,
-        base_price: draft.category === "CORTADORES" ? null : Number(draft.base_price || 0),
+        base_price:
+          draft.category === "CORTADORES"
+            ? null
+            : parseFloat(String(draft.base_price || 0).replace(',', '.')) || 0,
         active: draft.active,
       };
       let id = draft.id;
@@ -630,10 +633,11 @@ function Productos() {
               </div>
             ) : (
               <div className="space-y-2">
-                <Label>Precio base</Label>
+                <Label>Precio base ($)</Label>
                 <Input
                   className="tap"
                   inputMode="decimal"
+                  placeholder="0.00"
                   value={draft.base_price}
                   onChange={(e) => setDraft({ ...draft, base_price: e.target.value })}
                 />

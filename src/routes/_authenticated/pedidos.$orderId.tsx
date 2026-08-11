@@ -110,6 +110,7 @@ function DetallePedido() {
   const [addThemeFilter, setAddThemeFilter] = useState<string>("TODAS");
   const [addSearchQuery, setAddSearchQuery] = useState("");
   const addSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const [addDraftPriceInput, setAddDraftPriceInput] = useState<string>("0");
   const [addDraft, setAddDraft] = useState<{
     category: Category;
     product_id: string | null;
@@ -137,6 +138,7 @@ function DetallePedido() {
 
   // Estados para EDITAR artículo
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingPriceInput, setEditingPriceInput] = useState<string>("0");
   const [editingItem, setEditingItem] = useState<{
     id: string;
     category: Category;
@@ -170,6 +172,7 @@ function DetallePedido() {
 
   const handleProductSelect = (p: any | null) => {
     if (!p) {
+      setAddDraftPriceInput("0");
       setAddDraft((prev) => ({
         ...prev,
         product_id: null,
@@ -183,6 +186,10 @@ function DetallePedido() {
     }
     const isCutter = p.category === "CORTADORES";
     const img = (p.product_images ?? []).find((i: any) => i.is_primary) ?? p.product_images?.[0];
+    const initialPrice = isCutter
+      ? priceFor(rules, addDraft.cutter_modality || "cutter_only", addDraft.cutter_size_cm || 8)
+      : Number(p.base_price ?? 0);
+    setAddDraftPriceInput(String(initialPrice));
     setAddDraft((prev) => ({
       ...prev,
       product_id: p.id,
@@ -191,7 +198,7 @@ function DetallePedido() {
       category: p.category,
       cutter_modality: isCutter ? prev.cutter_modality || "cutter_only" : null,
       cutter_size_cm: isCutter ? prev.cutter_size_cm || 8 : null,
-      unit_price: isCutter ? 0 : Number(p.base_price ?? 0),
+      unit_price: initialPrice,
       price_overridden: false,
       image_preview: img,
     }));
@@ -255,6 +262,8 @@ function DetallePedido() {
   };
 
   const openEditModal = (it: any) => {
+    const rawPrice = Number(it.unit_price || 0);
+    setEditingPriceInput(String(rawPrice));
     setEditingItem({
       id: it.id,
       category: it.category,
@@ -263,7 +272,7 @@ function DetallePedido() {
       quantity: it.quantity,
       cutter_modality: it.cutter_modality,
       cutter_size_cm: it.cutter_size_cm,
-      unit_price: Number(it.unit_price || 0),
+      unit_price: rawPrice,
       price_overridden: !!it.price_overridden,
       price_override_reason: it.price_override_reason,
       notes: it.notes || "",
@@ -281,7 +290,7 @@ function DetallePedido() {
       toast.error("La cantidad debe ser al menos 1");
       return;
     }
-    const unitPrice = Number(editingItem.unit_price) || 0;
+    const unitPrice = parseFloat(String(editingItem.unit_price).replace(',', '.')) || 0;
     const subtotal = unitPrice * editingItem.quantity;
 
     const { error } = await supabase
@@ -932,12 +941,17 @@ function DetallePedido() {
                       <Label className="text-xs">Modalidad</Label>
                       <Select
                         value={addDraft.cutter_modality ?? "cutter_only"}
-                        onValueChange={(v) =>
+                        onValueChange={(v) => {
+                          const newMod = v as Modality;
+                          const autoPrice = priceFor(rules, newMod, addDraft.cutter_size_cm || 8);
+                          setAddDraftPriceInput(String(autoPrice));
                           setAddDraft((prev) => ({
                             ...prev,
-                            cutter_modality: v as Modality,
-                          }))
-                        }
+                            cutter_modality: newMod,
+                            unit_price: autoPrice,
+                            price_overridden: false,
+                          }));
+                        }}
                       >
                         <SelectTrigger className="tap h-9 text-xs">
                           <SelectValue />
@@ -956,12 +970,17 @@ function DetallePedido() {
                       <Label className="text-xs">Tamaño</Label>
                       <Select
                         value={String(addDraft.cutter_size_cm ?? 8)}
-                        onValueChange={(v) =>
+                        onValueChange={(v) => {
+                          const newSize = Number(v);
+                          const autoPrice = priceFor(rules, addDraft.cutter_modality || "cutter_only", newSize);
+                          setAddDraftPriceInput(String(autoPrice));
                           setAddDraft((prev) => ({
                             ...prev,
-                            cutter_size_cm: Number(v),
-                          }))
-                        }
+                            cutter_size_cm: newSize,
+                            unit_price: autoPrice,
+                            price_overridden: false,
+                          }));
+                        }}
                       >
                         <SelectTrigger className="tap h-9 text-xs">
                           <SelectValue />
@@ -1022,18 +1041,22 @@ function DetallePedido() {
 
                 {addDraft.category !== "CORTADORES" && (
                   <div className="space-y-1">
-                    <Label className="text-xs">Precio unitario</Label>
+                    <Label className="text-xs">Precio unitario ($)</Label>
                     <Input
                       className="tap h-9 text-sm"
                       inputMode="decimal"
-                      value={addDraft.price_overridden ? addDraft.unit_price : computedDraftPrice(addDraft)}
-                      onChange={(e) =>
+                      placeholder="0.00"
+                      value={addDraftPriceInput}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        setAddDraftPriceInput(raw);
+                        const parsed = parseFloat(raw.replace(',', '.')) || 0;
                         setAddDraft((prev) => ({
                           ...prev,
                           price_overridden: true,
-                          unit_price: Number(e.target.value) || 0,
-                        }))
-                      }
+                          unit_price: parsed,
+                        }));
+                      }}
                     />
                   </div>
                 )}
@@ -1115,10 +1138,12 @@ function DetallePedido() {
                       onValueChange={(v) => {
                         const newMod = v as Modality;
                         const autoPrice = priceFor(rules, newMod, editingItem.cutter_size_cm);
+                        setEditingPriceInput(String(autoPrice));
                         setEditingItem({
                           ...editingItem,
                           cutter_modality: newMod,
-                          unit_price: editingItem.price_overridden ? editingItem.unit_price : autoPrice,
+                          unit_price: autoPrice,
+                          price_overridden: false,
                         });
                       }}
                     >
@@ -1142,10 +1167,12 @@ function DetallePedido() {
                       onValueChange={(v) => {
                         const newSize = Number(v);
                         const autoPrice = priceFor(rules, editingItem.cutter_modality, newSize);
+                        setEditingPriceInput(String(autoPrice));
                         setEditingItem({
                           ...editingItem,
                           cutter_size_cm: newSize,
-                          unit_price: editingItem.price_overridden ? editingItem.unit_price : autoPrice,
+                          unit_price: autoPrice,
+                          price_overridden: false,
                         });
                       }}
                     >
@@ -1211,14 +1238,18 @@ function DetallePedido() {
                 <Input
                   className="tap text-sm"
                   inputMode="decimal"
-                  value={editingItem.unit_price}
-                  onChange={(e) =>
+                  placeholder="0.00"
+                  value={editingPriceInput}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    setEditingPriceInput(raw);
+                    const parsed = parseFloat(raw.replace(',', '.')) || 0;
                     setEditingItem({
                       ...editingItem,
                       price_overridden: true,
-                      unit_price: Number(e.target.value) || 0,
-                    })
-                  }
+                      unit_price: parsed,
+                    });
+                  }}
                 />
               </div>
 
@@ -1338,7 +1369,7 @@ function Pagos({ order, onChange }: { order: OrderData; onChange: () => void }) 
   const [viewer, setViewer] = useState<ImgRef[] | null>(null);
 
   const add = async () => {
-    const value = Number(amount);
+    const value = parseFloat(String(amount).replace(',', '.'));
     if (!value || value <= 0) {
       toast.error("Ingresa un monto válido");
       return;
@@ -1383,7 +1414,7 @@ function Pagos({ order, onChange }: { order: OrderData; onChange: () => void }) 
   };
 
   const currentBalance = Math.max(0, Number(order.balance ?? (order.total - (order.paid_amount || 0))));
-  const halfDeposit = Math.round(Number(order.total || 0) / 2);
+  const halfDeposit = Number((Number(order.total || 0) / 2).toFixed(2));
 
   return (
     <div className="space-y-4">
