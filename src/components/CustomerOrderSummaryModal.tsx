@@ -153,6 +153,7 @@ export function CustomerOrderSummaryModal({
 
       for (let i = 0; i < pageElements.length; i++) {
         const el = pageElements[i];
+        if (!el) continue;
         const dataUrl = await toPng(el, {
           quality: 0.98,
           pixelRatio: 2,
@@ -193,6 +194,7 @@ export function CustomerOrderSummaryModal({
       const files: File[] = [];
       for (let i = 0; i < pageElements.length; i++) {
         const el = pageElements[i];
+        if (!el) continue;
         const dataUrl = await toPng(el, {
           quality: 0.98,
           pixelRatio: 2,
@@ -407,7 +409,7 @@ export function CustomerOrderSummaryModal({
                           <div>
                             <span className="text-gray-500 text-[11px] block">Fecha</span>
                             <span className="font-semibold text-gray-800">
-                              {dateFmt(order.created_at)}
+                              {dateFmt(typeof order.created_at === "string" ? order.created_at : order.created_at.toISOString())}
                             </span>
                           </div>
                           <div className="col-span-2 pt-1 border-t border-gray-100 flex items-center justify-between">

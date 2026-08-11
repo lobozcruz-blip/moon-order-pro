@@ -10,6 +10,7 @@ import {
   Paperclip,
   Truck,
   MapPin,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/AppShell";
@@ -45,6 +46,7 @@ import {
   whatsappLink,
   type OrderStatus,
   type Priority,
+  type Modality,
 } from "@/lib/cm";
 import { uploadFile, logActivity } from "@/lib/storage";
 import { StoredImage, type ImgRef } from "@/components/StoredImage";
@@ -102,7 +104,7 @@ function DetallePedido() {
         sku: it.product_sku || it.products?.sku || null,
         category: it.category,
         quantity: it.quantity,
-        cutter_modality: it.cutter_modality as Modality,
+        cutter_modality: it.cutter_modality as Modality | null,
         cutter_size_cm: it.cutter_size_cm,
         unit_price: Number(it.unit_price || 0),
         subtotal: Number(it.subtotal || it.unit_price * it.quantity),
@@ -113,9 +115,9 @@ function DetallePedido() {
     discount: Number(order.discount || 0),
     shipping_cost: Number(order.shipping_cost || 0),
     total: Number(order.total || 0),
-    total_paid: Number(order.total_paid || 0),
-    balance: Number(order.balance ?? (order.total - (order.total_paid || 0))),
-    is_paid: (order.balance ?? (order.total - (order.total_paid || 0))) <= 0,
+    total_paid: Number(order.paid_amount || 0),
+    balance: Number(order.balance ?? (order.total - (order.paid_amount || 0))),
+    is_paid: (order.balance ?? (order.total - (order.paid_amount || 0))) <= 0,
   };
 
   type OrderPatch = Database["public"]["Tables"]["orders"]["Update"];

@@ -194,6 +194,8 @@ function NuevoPedido() {
   const [draftItem, setDraftItem] = useState<Item>(() =>
     createEmptyDraft("CORTADORES", "cutter_only", 8),
   );
+  // Modo artículo manual / personalizado (sin catálogo)
+  const [manualMode, setManualMode] = useState(false);
 
   // 4. Diálogo de edición para productos ya confirmados
   const [editingItem, setEditingItem] = useState<Item | null>(null);
@@ -241,6 +243,7 @@ function NuevoPedido() {
   const handleProductSelect = (p: any | null) => {
     if (!p) {
       // Modo manual
+      setManualMode(true);
       setDraftItem((prev) => ({
         ...prev,
         product_id: null,
@@ -254,6 +257,7 @@ function NuevoPedido() {
       return;
     }
 
+    setManualMode(false);
     const isCutter = p.category === "CORTADORES";
     const img = (p.product_images ?? []).find((i: any) => i.is_primary) ?? p.product_images?.[0];
 
@@ -337,6 +341,7 @@ function NuevoPedido() {
     const nextModality = draftItem.cutter_modality || lastModality;
     const nextSize = draftItem.cutter_size_cm || lastSize;
 
+    setManualMode(false);
     setDraftItem(createEmptyDraft(draftItem.category, nextModality, nextSize));
 
     // 2. Limpiar texto de búsqueda
@@ -425,6 +430,7 @@ function NuevoPedido() {
     setDiscount("0");
     setNote("");
     setItems([]);
+    setManualMode(false);
     setDraftItem(createEmptyDraft("CORTADORES", lastModality, lastSize));
     setSearchQuery("");
     setShowSuccessDialog(false);
@@ -581,7 +587,7 @@ function NuevoPedido() {
           unit_price: computedPrice(it),
           subtotal: computedPrice(it) * it.quantity,
           image_path: it.product_id
-            ? products.find((p) => p.id === it.product_id)?.product_images?.[0]?.storage_path
+            ? (products.find((p) => p.id === it.product_id)?.product_images?.[0]?.storage_path ?? null)
             : null,
         })),
         subtotal,
@@ -749,12 +755,12 @@ function NuevoPedido() {
               onKeyDown={handleKeyDownOnDraft}
               className={cn(
                 "rounded-xl border p-4 transition-all",
-                draftItem.product_name || draftItem.product_id !== null
+                manualMode || draftItem.product_name || draftItem.product_id !== null
                   ? "border-primary/60 bg-secondary/60 shadow-sm ring-1 ring-primary/20"
                   : "border-dashed border-border bg-card/40",
               )}
             >
-              {draftItem.product_id !== null || draftItem.product_name ? (
+              {manualMode || draftItem.product_id !== null || draftItem.product_name ? (
                 <div className="space-y-4">
                   {/* Encabezado del producto seleccionado */}
                   <div className="flex items-center gap-3 border-b border-border/60 pb-3">
@@ -793,15 +799,16 @@ function NuevoPedido() {
 
                     <button
                       type="button"
-                      onClick={() =>
+                      onClick={() => {
+                        setManualMode(false);
                         setDraftItem(
                           createEmptyDraft(
                             draftItem.category,
                             draftItem.cutter_modality || lastModality,
                             draftItem.cutter_size_cm || lastSize,
                           ),
-                        )
-                      }
+                        );
+                      }}
                       className="text-xs text-muted-foreground hover:text-destructive"
                     >
                       Cambiar
@@ -812,18 +819,47 @@ function NuevoPedido() {
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {/* Modo Manual: campo de nombre si no tiene catálogo */}
                     {!draftItem.product_id && (
-                      <div className="space-y-1 sm:col-span-2 lg:col-span-3">
-                        <Label className="text-xs">Nombre del artículo *</Label>
-                        <Input
-                          className="tap h-9 text-sm"
-                          placeholder="Escribe el nombre del artículo..."
-                          value={draftItem.product_name}
-                          onChange={(e) =>
-                            setDraftItem((prev) => ({ ...prev, product_name: e.target.value }))
-                          }
-                          autoFocus
-                        />
-                      </div>
+                      <>
+                        <div className="space-y-1 sm:col-span-2">
+                          <Label className="text-xs">Nombre del artículo *</Label>
+                          <Input
+                            className="tap h-9 text-sm"
+                            placeholder="Escribe el nombre del artículo..."
+                            value={draftItem.product_name}
+                            onChange={(e) =>
+                              setDraftItem((prev) => ({ ...prev, product_name: e.target.value }))
+                            }
+                            autoFocus
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Categoría</Label>
+                          <Select
+                            value={draftItem.category}
+                            onValueChange={(v) =>
+                              setDraftItem((prev) => ({
+                                ...prev,
+                                category: v as Category,
+                                cutter_modality:
+                                  v === "CORTADORES" ? (prev.cutter_modality ?? lastModality) : null,
+                                cutter_size_cm:
+                                  v === "CORTADORES" ? (prev.cutter_size_cm ?? lastSize) : null,
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="tap h-9 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {CATEGORIES.map((c) => (
+                                <SelectItem key={c} value={c}>
+                                  {CATEGORY_META[c].label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </>
                     )}
 
                     {/* CORTADORES: Modalidad y Tamaño */}
