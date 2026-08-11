@@ -807,8 +807,8 @@ function NuevoPedido() {
                             draftItem.cutter_modality || lastModality,
                             draftItem.cutter_size_cm || lastSize,
                           ),
-                        )
-                      }
+                        );
+                      }}
                       className="text-xs text-muted-foreground hover:text-destructive"
                     >
                       Cambiar
