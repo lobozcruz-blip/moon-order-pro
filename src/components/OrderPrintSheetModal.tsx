@@ -236,10 +236,10 @@ export function OrderPrintSheetModal({ open, onOpenChange, order }: OrderPrintSh
                     {order.folio}
                   </div>
                   <div className="text-[11px] text-neutral-700 space-y-0.5 pt-0.5">
-                    <p><strong>Fecha Registro:</strong> {dateTimeFmt(order.created_at)}</p>
+                    <p><strong>Fecha Registro:</strong> {dateTimeFmt(String(order.created_at))}</p>
                     {order.due_date && (
                       <p className="text-neutral-900 font-bold">
-                        📅 <strong>Fecha Entrega:</strong> {dateFmt(order.due_date)}
+                        📅 <strong>Fecha Entrega:</strong> {dateFmt(String(order.due_date))}
                       </p>
                     )}
                     <div className="flex items-center justify-end gap-1.5 pt-0.5">
@@ -420,7 +420,7 @@ export function OrderPrintSheetModal({ open, onOpenChange, order }: OrderPrintSh
                               {p.reference ? `(Ref. ${p.reference})` : ""}
                             </span>
                             <span className="text-neutral-500 font-mono text-[10px]">
-                              {dateTimeFmt(p.paid_at)}
+                              {dateTimeFmt(String(p.paid_at))}
                             </span>
                           </div>
                         ))}
