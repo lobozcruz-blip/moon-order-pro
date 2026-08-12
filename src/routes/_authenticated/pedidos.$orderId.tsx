@@ -104,6 +104,17 @@ function DetallePedido() {
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showPrintSheetModal, setShowPrintSheetModal] = useState(false);
 
+  // Estados para Costo de Envío y Descuento editables
+  const [shippingCostInput, setShippingCostInput] = useState<string>("0");
+  const [discountInput, setDiscountInput] = useState<string>("0");
+
+  useEffect(() => {
+    if (order) {
+      setShippingCostInput(String(order.shipping_cost ?? 0));
+      setDiscountInput(String(order.discount ?? 0));
+    }
+  }, [order?.shipping_cost, order?.discount]);
+
   // Estados para AÑADIR artículo
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [addCategoryFilter, setAddCategoryFilter] = useState<Category | "TODAS">("TODAS");
@@ -444,17 +455,28 @@ function DetallePedido() {
     })),
   };
 
-  type OrderPatch = Database["public"]["Tables"]["orders"]["Update"];
-
   const patchOrder = async (patch: OrderPatch, label: string) => {
     const { error } = await supabase.from("orders").update(patch).eq("id", orderId);
     if (error) {
       toast.error(error.message);
       return;
     }
+    if (patch.shipping_cost !== undefined && order?.shipping_details) {
+      await supabase
+        .from("shipping_details")
+        .update({ shipping_cost: patch.shipping_cost })
+        .eq("order_id", orderId);
+    }
+    if (patch.shipping_cost !== undefined || patch.discount !== undefined) {
+      await supabase.rpc("recalc_order", { _order_id: orderId });
+    }
     await logActivity({ action: label, entity: "order", order_id: orderId });
     toast.success(label);
     refresh();
+  };
+
+  const updateShippingCost = async (newCost: number) => {
+    await patchOrder({ shipping_cost: newCost }, `Costo de envío actualizado a ${money(newCost)}`);
   };
 
   const setItemDone = async (id: string, done: boolean, qty: number) => {
@@ -716,7 +738,11 @@ function DetallePedido() {
             </TabsContent>
 
             <TabsContent value="entrega" className="mt-4">
-              <Entrega order={order} onPrintOrder={() => setShowPrintSheetModal(true)} />
+              <Entrega
+                order={order}
+                onPrintOrder={() => setShowPrintSheetModal(true)}
+                onUpdateShippingCost={updateShippingCost}
+              />
             </TabsContent>
           </Tabs>
         </div>
@@ -815,13 +841,45 @@ function DetallePedido() {
             <div className="space-y-2">
               <Label>Descuento ($)</Label>
               <Input
-                type="number"
-                step="any"
+                type="text"
+                inputMode="decimal"
+                placeholder="0.00"
                 className="tap"
-                value={order.discount}
-                onChange={(e) =>
-                  patchOrder({ discount: Number(e.target.value) || 0 }, "Descuento actualizado")
-                }
+                value={discountInput}
+                onChange={(e) => setDiscountInput(e.target.value)}
+                onBlur={() => {
+                  const val = parseFloat(discountInput.replace(',', '.')) || 0;
+                  if (val !== Number(order.discount || 0)) {
+                    patchOrder({ discount: val }, "Descuento actualizado");
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Costo de envío ($)</Label>
+              <Input
+                type="text"
+                inputMode="decimal"
+                placeholder="0.00"
+                className="tap"
+                value={shippingCostInput}
+                onChange={(e) => setShippingCostInput(e.target.value)}
+                onBlur={() => {
+                  const val = parseFloat(shippingCostInput.replace(',', '.')) || 0;
+                  if (val !== Number(order.shipping_cost || 0)) {
+                    patchOrder({ shipping_cost: val }, "Costo de envío actualizado");
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
               />
             </div>
             {isAdmin && (
@@ -1652,12 +1710,33 @@ function Notas({
 function Entrega({
   order,
   onPrintOrder,
+  onUpdateShippingCost,
 }: {
   order: OrderData;
   onPrintOrder?: () => void;
+  onUpdateShippingCost?: (cost: number) => Promise<void>;
 }) {
   const s = order.shipping_details;
   const d = order.personal_delivery_details;
+  const [editingCost, setEditingCost] = useState(false);
+  const [costInput, setCostInput] = useState(String(order.shipping_cost ?? s?.shipping_cost ?? 0));
+  const [savingCost, setSavingCost] = useState(false);
+
+  useEffect(() => {
+    setCostInput(String(order.shipping_cost ?? s?.shipping_cost ?? 0));
+  }, [order.shipping_cost, s?.shipping_cost]);
+
+  const handleSaveCost = async () => {
+    if (!onUpdateShippingCost) return;
+    setSavingCost(true);
+    try {
+      const parsed = parseFloat(costInput.replace(',', '.')) || 0;
+      await onUpdateShippingCost(parsed);
+      setEditingCost(false);
+    } finally {
+      setSavingCost(false);
+    }
+  };
 
   if (order.delivery_type === "envio" && s)
     return (
@@ -1698,12 +1777,63 @@ function Entrega({
           )}
         </div>
 
-        <div className="border-t border-border pt-2 grid gap-1 text-xs text-muted-foreground">
+        <div className="border-t border-border pt-2 grid gap-1.5 text-xs text-muted-foreground">
           <p>
             Paquetería: <strong className="text-foreground">{s.carrier ?? "—"}</strong> · Guía:{" "}
             <strong className="text-foreground font-mono">{s.tracking_number ?? "pendiente"}</strong>
           </p>
-          <p>Costo de envío: <strong className="text-foreground">{money(s.shipping_cost)}</strong></p>
+          <div className="flex flex-wrap items-center gap-2 py-0.5">
+            <span>Costo de envío:</span>
+            {editingCost ? (
+              <div className="inline-flex items-center gap-1.5">
+                <Input
+                  className="tap h-7 w-24 text-xs"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={costInput}
+                  onChange={(e) => setCostInput(e.target.value)}
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSaveCost();
+                    if (e.key === "Escape") setEditingCost(false);
+                  }}
+                />
+                <Button
+                  size="sm"
+                  className="tap h-7 px-2.5 text-xs bg-primary text-primary-foreground font-semibold"
+                  disabled={savingCost}
+                  onClick={handleSaveCost}
+                >
+                  Guardar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="tap h-7 px-2 text-xs"
+                  disabled={savingCost}
+                  onClick={() => setEditingCost(false)}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-1.5">
+                <strong className="text-foreground font-semibold text-sm">
+                  {money(order.shipping_cost || s.shipping_cost || 0)}
+                </strong>
+                {onUpdateShippingCost && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="tap h-6 px-2 text-[11px] font-medium text-primary border-primary/30 hover:bg-primary/10"
+                    onClick={() => setEditingCost(true)}
+                  >
+                    ✏️ Modificar
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
           {s.special_instructions && (
             <p>Instrucciones: {s.special_instructions}</p>
           )}
