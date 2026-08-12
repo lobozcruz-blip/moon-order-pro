@@ -58,8 +58,8 @@ type Order = ReturnType<typeof useOrders>["data"] extends (infer T)[] | undefine
 
 function progressOf(o: Order) {
   const items = o.order_items ?? [];
-  const total = items.reduce((a, i) => a + i.quantity, 0);
-  const done = items.reduce((a, i) => a + (i.is_done ? i.quantity : i.done_quantity), 0);
+  const total = items.reduce((a, i) => a + (Number(i.quantity) || 0), 0);
+  const done = items.reduce((a, i) => a + (i.is_done ? (Number(i.quantity) || 0) : (Number(i.done_quantity) || 0)), 0);
   return total ? Math.round((done / total) * 100) : 0;
 }
 
@@ -98,14 +98,16 @@ function Pedidos() {
       toast.error(error.message);
       return;
     }
+    const prevLabel = STATUS_META[prev]?.label ?? prev;
+    const nextLabel = STATUS_META[next]?.label ?? next;
     await logActivity({
       action: "Estado de pedido actualizado",
       entity: "order",
       order_id: id,
-      old_value: STATUS_META[prev].label,
-      new_value: STATUS_META[next].label,
+      old_value: prevLabel,
+      new_value: nextLabel,
     });
-    toast.success(`Pedido movido a ${STATUS_META[next].label}`);
+    toast.success(`Pedido movido a ${nextLabel}`);
     invalidate("orders", "activity");
   };
 
@@ -136,7 +138,6 @@ function Pedidos() {
               </Link>
             </Button>
             <Button
-
               variant="secondary"
               className="tap"
               onClick={() => setView(view === "kanban" ? "lista" : "kanban")}
@@ -173,7 +174,7 @@ function Pedidos() {
             <SelectItem value="todos">Todos los estados</SelectItem>
             {ORDER_STATUSES.map((s) => (
               <SelectItem key={s} value={s}>
-                {STATUS_META[s].label}
+                {STATUS_META[s]?.label ?? s}
               </SelectItem>
             ))}
           </SelectContent>
@@ -222,33 +223,37 @@ function Pedidos() {
         </DndContext>
       ) : (
         <div className="panel divide-y divide-border">
-          {rows.map((o) => (
-            <Link
-              key={o.id}
-              to="/pedidos/$orderId"
-              params={{ orderId: o.id }}
-              className="flex flex-wrap items-center gap-3 p-3 transition-colors hover:bg-secondary"
-            >
-              <span className="font-mono text-xs text-muted-foreground">{o.folio ?? "—"}</span>
-              <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                {fullName(o.customers?.first_name, o.customers?.last_name)}
-              </span>
-              <span
-                className="chip"
-                style={{
-                  color: `var(--${STATUS_META[o.status].token})`,
-                  background: `color-mix(in oklab, var(--${STATUS_META[o.status].token}) 16%, transparent)`,
-                }}
+          {rows.map((o) => {
+            const stMeta = STATUS_META[o.status] ?? STATUS_META.en_espera;
+            const payMeta = (o.payment_status && PAYMENT_META[o.payment_status]) ? PAYMENT_META[o.payment_status] : PAYMENT_META.sin_pago;
+            return (
+              <Link
+                key={o.id}
+                to="/pedidos/$orderId"
+                params={{ orderId: o.id }}
+                className="flex flex-wrap items-center gap-3 p-3 transition-colors hover:bg-secondary"
               >
-                {STATUS_META[o.status].label}
-              </span>
-              <span className="chip" style={{ color: `var(--${PAYMENT_META[o.payment_status].token})` }}>
-                {PAYMENT_META[o.payment_status].label}
-              </span>
-              <span className="text-xs text-muted-foreground">{dateFmt(o.due_date)}</span>
-              <span className="w-24 text-right text-sm font-semibold">{money(o.total)}</span>
-            </Link>
-          ))}
+                <span className="font-mono text-xs text-muted-foreground">{o.folio ?? "—"}</span>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {fullName(o.customers?.first_name, o.customers?.last_name)}
+                </span>
+                <span
+                  className="chip"
+                  style={{
+                    color: `var(--${stMeta.token})`,
+                    background: `color-mix(in oklab, var(--${stMeta.token}) 16%, transparent)`,
+                  }}
+                >
+                  {stMeta.label}
+                </span>
+                <span className="chip" style={{ color: `var(--${payMeta.token})` }}>
+                  {payMeta.label}
+                </span>
+                <span className="text-xs text-muted-foreground">{dateFmt(o.due_date)}</span>
+                <span className="w-24 text-right text-sm font-semibold">{money(o.total)}</span>
+              </Link>
+            );
+          })}
           {!isLoading && rows.length === 0 && (
             <p className="py-12 text-center text-sm text-muted-foreground">Sin pedidos.</p>
           )}
@@ -268,7 +273,7 @@ function Column({
   onMove: (id: string, next: OrderStatus, prev: OrderStatus) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
-  const meta = STATUS_META[status];
+  const meta = STATUS_META[status] ?? STATUS_META.en_espera;
   return (
     <div
       ref={setNodeRef}
@@ -315,6 +320,7 @@ function OrderCard({
   const priority = PRIORITIES.find((p) => p.value === order.priority)?.label;
   const today = new Date().toISOString().slice(0, 10);
   const late = order.due_date && order.due_date < today && order.status !== "finalizado";
+  const payMeta = (order.payment_status && PAYMENT_META[order.payment_status]) ? PAYMENT_META[order.payment_status] : PAYMENT_META.sin_pago;
 
   return (
     <div
@@ -352,8 +358,8 @@ function OrderCard({
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <span className="chip" style={{ color: `var(--${PAYMENT_META[order.payment_status].token})` }}>
-          {PAYMENT_META[order.payment_status].label}
+        <span className="chip" style={{ color: `var(--${payMeta.token})` }}>
+          {payMeta.label}
         </span>
         {priority && order.priority !== "normal" && (
           <span className="chip bg-background text-muted-foreground">{priority}</span>
@@ -364,7 +370,7 @@ function OrderCard({
       </div>
 
       <Select
-        value={order.status}
+        value={order.status ?? "en_espera"}
         onValueChange={(v) => onMove(order.id, v as OrderStatus, order.status)}
       >
         <SelectTrigger className="tap mt-2 h-9 text-xs lg:hidden">
@@ -373,7 +379,7 @@ function OrderCard({
         <SelectContent>
           {ORDER_STATUSES.map((s) => (
             <SelectItem key={s} value={s}>
-              {STATUS_META[s].label}
+              {STATUS_META[s]?.label ?? s}
             </SelectItem>
           ))}
         </SelectContent>

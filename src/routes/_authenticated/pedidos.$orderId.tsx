@@ -357,15 +357,18 @@ function DetallePedido() {
   if (!order) return <p className="py-16 text-center text-sm text-muted-foreground">Pedido no encontrado.</p>;
 
   const items = order.order_items ?? [];
-  const totalUnits = items.reduce((a, i) => a + i.quantity, 0);
-  const doneUnits = items.reduce((a, i) => a + (i.is_done ? i.quantity : i.done_quantity), 0);
+  const totalUnits = items.reduce((a, i) => a + (Number(i.quantity) || 0), 0);
+  const doneUnits = items.reduce((a, i) => a + (i.is_done ? (Number(i.quantity) || 0) : (Number(i.done_quantity) || 0)), 0);
   const pct = totalUnits ? Math.round((doneUnits / totalUnits) * 100) : 0;
   const wa = whatsappLink(order.customers?.phone);
+
+  const ship = Array.isArray(order.shipping_details) ? order.shipping_details[0] : order.shipping_details;
+  const pers = Array.isArray(order.personal_delivery_details) ? order.personal_delivery_details[0] : order.personal_delivery_details;
 
   const summaryData: SummaryOrderData = {
     id: order.id,
     folio: order.folio ?? "Pedido",
-    created_at: order.created_at,
+    created_at: order.created_at ?? new Date().toISOString(),
     customer_name: fullName(order.customers?.first_name, order.customers?.last_name) || "Cliente",
     delivery_type: order.delivery_type as any,
     items: (order.order_items ?? []).map((it: any) => {
@@ -376,11 +379,11 @@ function DetallePedido() {
         name: it.product_name,
         sku: it.product_sku || it.products?.sku || null,
         category: it.category,
-        quantity: it.quantity,
+        quantity: Number(it.quantity) || 1,
         cutter_modality: it.cutter_modality as Modality | null,
         cutter_size_cm: it.cutter_size_cm,
         unit_price: Number(it.unit_price || 0),
-        subtotal: Number(it.subtotal || it.unit_price * it.quantity),
+        subtotal: Number(it.subtotal || (it.unit_price || 0) * (it.quantity || 1)),
         image_path: customImg || prodImg || null,
       };
     }),
@@ -396,7 +399,7 @@ function DetallePedido() {
   const printSheetData: OrderPrintSheetData = {
     id: order.id,
     folio: order.folio ?? "Pedido",
-    created_at: order.created_at,
+    created_at: order.created_at ?? new Date().toISOString(),
     due_date: order.due_date,
     priority: order.priority ?? "normal",
     status: order.status ?? "en_espera",
@@ -409,34 +412,34 @@ function DetallePedido() {
     },
     delivery: {
       type: (order.delivery_type as any) ?? "envio",
-      street: order.shipping_details?.street ?? null,
-      ext_number: order.shipping_details?.ext_number ?? null,
-      int_number: order.shipping_details?.int_number ?? null,
-      neighborhood: order.shipping_details?.neighborhood ?? null,
-      postal_code: order.shipping_details?.postal_code ?? null,
-      city: order.shipping_details?.city ?? null,
-      municipality: order.shipping_details?.municipality ?? null,
-      state: order.shipping_details?.state ?? null,
-      references_text: order.shipping_details?.references_text ?? null,
-      carrier: order.shipping_details?.carrier ?? null,
-      tracking_number: order.shipping_details?.tracking_number ?? null,
-      shipping_cost: Number(order.shipping_details?.shipping_cost || order.shipping_cost || 0),
-      special_instructions: order.shipping_details?.special_instructions ?? null,
-      place: order.personal_delivery_details?.place ?? null,
-      delivery_date: order.personal_delivery_details?.delivery_date ?? null,
-      delivery_time: order.personal_delivery_details?.delivery_time ?? null,
-      instructions: order.personal_delivery_details?.instructions ?? null,
+      street: ship?.street ?? null,
+      ext_number: ship?.ext_number ?? null,
+      int_number: ship?.int_number ?? null,
+      neighborhood: ship?.neighborhood ?? null,
+      postal_code: ship?.postal_code ?? null,
+      city: ship?.city ?? null,
+      municipality: ship?.municipality ?? null,
+      state: ship?.state ?? null,
+      references_text: ship?.references_text ?? null,
+      carrier: ship?.carrier ?? null,
+      tracking_number: ship?.tracking_number ?? null,
+      shipping_cost: Number(ship?.shipping_cost || order.shipping_cost || 0),
+      special_instructions: ship?.special_instructions ?? null,
+      place: pers?.place ?? null,
+      delivery_date: pers?.delivery_date ?? null,
+      delivery_time: pers?.delivery_time ?? null,
+      instructions: pers?.instructions ?? null,
     },
     items: (order.order_items ?? []).map((it: any) => ({
       id: it.id,
       name: it.product_name,
       sku: it.product_sku || it.products?.sku || null,
       category: it.category,
-      quantity: it.quantity,
+      quantity: Number(it.quantity) || 1,
       cutter_modality: it.cutter_modality as Modality,
       cutter_size_cm: it.cutter_size_cm,
       unit_price: Number(it.unit_price || 0),
-      subtotal: Number(it.subtotal || it.unit_price * it.quantity),
+      subtotal: Number(it.subtotal || (it.unit_price || 0) * (it.quantity || 1)),
       notes: it.notes,
       is_done: it.is_done,
     })),
@@ -455,13 +458,15 @@ function DetallePedido() {
     })),
   };
 
+  type OrderPatch = Database["public"]["Tables"]["orders"]["Update"];
+
   const patchOrder = async (patch: OrderPatch, label: string) => {
     const { error } = await supabase.from("orders").update(patch).eq("id", orderId);
     if (error) {
       toast.error(error.message);
       return;
     }
-    if (patch.shipping_cost !== undefined && order?.shipping_details) {
+    if (patch.shipping_cost !== undefined && ship) {
       await supabase
         .from("shipping_details")
         .update({ shipping_cost: patch.shipping_cost })
@@ -621,6 +626,7 @@ function DetallePedido() {
                     ...(it.order_item_images ?? []),
                     ...(((it as { products?: { product_images?: ImgRef[] } }).products?.product_images ?? []) as ImgRef[]),
                   ];
+                  const catMeta = (it.category && CATEGORY_META[it.category as Category]) ?? CATEGORY_META.OTROS;
                   return (
                     <div key={it.id} className="panel p-3">
                       <div className="flex gap-3">
@@ -636,11 +642,11 @@ function DetallePedido() {
                             <span
                               className="chip text-[10px] py-0 px-1.5"
                               style={{
-                                color: `var(--${CATEGORY_META[it.category].token})`,
-                                background: `color-mix(in oklab, var(--${CATEGORY_META[it.category].token}) 16%, transparent)`,
+                                color: `var(--${catMeta.token})`,
+                                background: `color-mix(in oklab, var(--${catMeta.token}) 16%, transparent)`,
                               }}
                             >
-                              {CATEGORY_META[it.category].label}
+                              {catMeta.label}
                             </span>
                             <div className="flex items-center gap-1">
                               <Button
