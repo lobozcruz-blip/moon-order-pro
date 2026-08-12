@@ -10,6 +10,7 @@ import {
   Plus,
   LogOut,
   Hammer,
+  TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
@@ -19,6 +20,7 @@ import { BrandLogo } from "@/components/BrandLogo";
 
 const NAV = [
   { to: "/panel", label: "Panel", icon: LayoutDashboard },
+  { to: "/ventas", label: "Ventas", icon: TrendingUp },
   { to: "/pedidos", label: "Pedidos", icon: ClipboardList },
   { to: "/taller", label: "Taller 3D", icon: Hammer },
   { to: "/productos", label: "Productos", icon: Package },
@@ -97,7 +99,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </Link>
 
       {/* Navegación inferior (móvil / tablet) */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-7 border-t border-border bg-sidebar pb-[env(safe-area-inset-bottom)] lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-8 border-t border-border bg-sidebar pb-[env(safe-area-inset-bottom)] lg:hidden">
         {NAV.map(({ to, label, icon: Icon }) => (
           <Link
             key={to}
