@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   ArrowLeft,
   MessageCircle,
@@ -87,6 +87,20 @@ export const Route = createFileRoute("/_authenticated/pedidos/$orderId")({
       { property: "og:description", content: "Producción, pagos, notas y entrega del pedido." },
     ],
   }),
+  errorComponent: ({ error, reset }) => (
+    <div className="mx-auto max-w-md py-16 text-center">
+      <p className="font-display text-lg font-bold text-destructive">No se pudo cargar el pedido</p>
+      <p className="mt-2 text-xs text-muted-foreground">{error?.message || "Ocurrió un error al consultar los datos."}</p>
+      <div className="mt-4 flex justify-center gap-2">
+        <Button size="sm" onClick={() => reset()} className="tap">
+          Reintentar
+        </Button>
+        <Button size="sm" variant="outline" asChild className="tap">
+          <Link to="/pedidos" search={{ cliente: undefined }}>Volver al tablero</Link>
+        </Button>
+      </div>
+    </div>
+  ),
   component: DetallePedido,
 });
 
@@ -1722,8 +1736,8 @@ function Entrega({
   onPrintOrder?: () => void;
   onUpdateShippingCost?: (cost: number) => Promise<void>;
 }) {
-  const s = order.shipping_details;
-  const d = order.personal_delivery_details;
+  const s = (Array.isArray(order.shipping_details) ? order.shipping_details[0] : order.shipping_details) as any;
+  const d = (Array.isArray(order.personal_delivery_details) ? order.personal_delivery_details[0] : order.personal_delivery_details) as any;
   const [editingCost, setEditingCost] = useState(false);
   const [costInput, setCostInput] = useState(String(order.shipping_cost ?? s?.shipping_cost ?? 0));
   const [savingCost, setSavingCost] = useState(false);
