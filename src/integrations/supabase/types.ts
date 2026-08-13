@@ -288,8 +288,6 @@ export type Database = {
           created_by: string | null
           external_url: string | null
           id: string
-          image_type: string
-          is_primary: boolean
           order_item_id: string
           sort_order: number
           storage_path: string | null
@@ -299,8 +297,6 @@ export type Database = {
           created_by?: string | null
           external_url?: string | null
           id?: string
-          image_type?: string
-          is_primary?: boolean
           order_item_id: string
           sort_order?: number
           storage_path?: string | null
@@ -310,8 +306,6 @@ export type Database = {
           created_by?: string | null
           external_url?: string | null
           id?: string
-          image_type?: string
-          is_primary?: boolean
           order_item_id?: string
           sort_order?: number
           storage_path?: string | null
@@ -337,7 +331,6 @@ export type Database = {
           done_by: string | null
           done_quantity: number
           id: string
-          is_custom: boolean
           is_done: boolean
           notes: string | null
           order_id: string
@@ -364,7 +357,6 @@ export type Database = {
           done_by?: string | null
           done_quantity?: number
           id?: string
-          is_custom?: boolean
           is_done?: boolean
           notes?: string | null
           order_id: string
@@ -391,7 +383,6 @@ export type Database = {
           done_by?: string | null
           done_quantity?: number
           id?: string
-          is_custom?: boolean
           is_done?: boolean
           notes?: string | null
           order_id?: string
