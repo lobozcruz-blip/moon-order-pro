@@ -391,10 +391,7 @@ function DetallePedido() {
   const ship = Array.isArray(order.shipping_details) ? order.shipping_details[0] : order.shipping_details;
   const pers = Array.isArray(order.personal_delivery_details) ? order.personal_delivery_details[0] : order.personal_delivery_details;
 
-  const summaryData: SummaryOrderData = useMemo(
-    () => buildCustomerOrderSummary(order),
-    [order],
-  );
+  const summaryData: SummaryOrderData = buildCustomerOrderSummary(order);
 
   const printSheetData: OrderPrintSheetData = {
     id: order.id,

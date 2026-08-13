@@ -537,8 +537,14 @@ function NuevoPedido() {
       // 3. Subir imágenes físicas a Storage y crear registros en order_item_images
       for (let idx = 0; idx < items.length; idx++) {
         const it = items[idx];
-        const createdItem = createdItems?.[idx];
-        if (!it || !createdItem || it.custom_images.length === 0) continue;
+        if (!it || it.custom_images.length === 0) continue;
+
+        const createdItem = createdItems?.find((row) => row.sort_order === idx);
+        if (!createdItem) {
+          throw new Error(`No se encontró el registro creado para el artículo "${it.product_name}".`);
+        }
+
+        const hasAnyPrimary = it.custom_images.some((img) => Boolean(img.is_primary));
 
         for (let imgIdx = 0; imgIdx < it.custom_images.length; imgIdx++) {
           const customImg = it.custom_images[imgIdx];
@@ -552,22 +558,28 @@ function NuevoPedido() {
               storagePath = await uploadFile("pedidos", customImg.file, `${order.id}/${keyHint}`);
             } catch (err: any) {
               console.error("Error uploading custom image:", err);
-              toast.error(
-                `No se pudo guardar la imagen de referencia de "${it.product_name}".`,
+              throw new Error(
+                `No se pudo guardar el archivo de imagen para "${it.product_name}": ${err?.message || "Error de red"}`
               );
-              throw err;
             }
           }
 
           if (storagePath) {
+            const isPrimary = customImg.is_primary ?? (!hasAnyPrimary && imgIdx === 0);
             const { error: imgErr } = await supabase.from("order_item_images").insert({
               order_item_id: createdItem.id,
               storage_path: storagePath,
-              is_primary: customImg.is_primary ?? false,
+              is_primary: isPrimary,
               image_type: "custom_reference",
               sort_order: imgIdx,
             });
-            if (imgErr) console.error("Error inserting order_item_images:", imgErr);
+
+            if (imgErr) {
+              console.error("Error inserting order_item_images:", imgErr);
+              throw new Error(
+                `No se pudo vincular la imagen personalizada de "${it.product_name}": ${imgErr.message}`
+              );
+            }
           }
         }
       }
@@ -619,7 +631,7 @@ function NuevoPedido() {
       await logActivity({ action: "Pedido creado", entity: "order", order_id: order.id });
 
       // Obtener el pedido completo recién persistido desde Supabase incluyendo order_item_images y productos
-      const { data: freshOrder } = await supabase
+      const { data: freshOrder, error: freshOrderError } = await supabase
         .from("orders")
         .select(`
           *,
@@ -641,13 +653,12 @@ function NuevoPedido() {
         .eq("id", order.id)
         .single();
 
-      const summaryData = buildCustomerOrderSummary(freshOrder ?? {
-        ...order,
-        customers: customerId && customers ? customers.find((c) => c.id === customerId) : newCustomer,
-        items,
-        shipping_details: shipping,
-        personal_delivery_details: delivery,
-      });
+      if (freshOrderError || !freshOrder) {
+        console.error("Error fetching persisted order:", freshOrderError);
+        throw freshOrderError || new Error("No se pudo cargar el pedido recién guardado de la base de datos.");
+      }
+
+      const summaryData = buildCustomerOrderSummary(freshOrder);
 
       setCreatedOrderId(order.id);
       setCreatedOrderSummary(summaryData);
