@@ -79,6 +79,7 @@ import { CustomerOrderSummaryModal, type SummaryOrderData } from "@/components/C
 import { OrderPrintSheetModal, type OrderPrintSheetData } from "@/components/OrderPrintSheetModal";
 import { CustomDesignViewerModal } from "@/components/orders/CustomDesignViewerModal";
 import { useAuth } from "@/lib/auth";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/pedidos/$orderId")({
   head: () => ({

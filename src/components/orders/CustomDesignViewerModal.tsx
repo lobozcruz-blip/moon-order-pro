@@ -38,16 +38,16 @@ export function CustomDesignViewerModal({
   catalogImages = [],
 }: {
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange: (open: boolean) => void | boolean;
   title: string;
-  productSku?: string | null;
-  isCustom?: boolean;
-  customNotes?: string | null;
-  customImages?: CustomViewerImage[];
-  catalogImages?: any[];
+  productSku?: string | null | undefined;
+  isCustom?: boolean | undefined;
+  customNotes?: string | null | undefined;
+  customImages?: CustomViewerImage[] | undefined;
+  catalogImages?: any[] | undefined;
 }) {
   const [selectedZoomImg, setSelectedZoomImg] = useState<{
-    url?: string;
+    url?: string | undefined;
     imageObj?: any;
     label: string;
   } | null>(null);

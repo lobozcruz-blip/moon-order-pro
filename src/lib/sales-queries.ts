@@ -206,7 +206,7 @@ export type FinancialOrder = {
   paid_amount: number;
   balance: number;
   items_count: number;
-  category_subtotal?: number;
+  category_subtotal?: number | undefined;
 };
 
 export type FinancialPayment = {

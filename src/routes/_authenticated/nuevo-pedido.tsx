@@ -537,10 +537,11 @@ function NuevoPedido() {
       for (let idx = 0; idx < items.length; idx++) {
         const it = items[idx];
         const createdItem = createdItems?.[idx];
-        if (!createdItem || it.custom_images.length === 0) continue;
+        if (!it || !createdItem || it.custom_images.length === 0) continue;
 
         for (let imgIdx = 0; imgIdx < it.custom_images.length; imgIdx++) {
           const customImg = it.custom_images[imgIdx];
+          if (!customImg) continue;
           let storagePath = customImg.storage_path;
 
           if (customImg.file) {
@@ -653,14 +654,10 @@ function NuevoPedido() {
               null
             : null,
         })),
+        subtotal,
         shipping_cost: shippingCost,
         discount: discountNum,
         total,
-        advance_payment: 0,
-        due_date: dueDate || null,
-        personal_delivery_place: deliveryType === "entrega_personal" ? delivery.place : undefined,
-        personal_delivery_time:
-          deliveryType === "entrega_personal" ? delivery.delivery_time : undefined,
       };
 
       setCreatedOrderId(order.id);

@@ -330,6 +330,7 @@ export type Database = {
         Row: {
           category: Database["public"]["Enums"]["product_category"]
           created_at: string
+          custom_notes: string | null
           cutter_modality: Database["public"]["Enums"]["cutter_modality"] | null
           cutter_size_cm: number | null
           description: string | null
@@ -355,6 +356,7 @@ export type Database = {
         Insert: {
           category: Database["public"]["Enums"]["product_category"]
           created_at?: string
+          custom_notes?: string | null
           cutter_modality?:
             | Database["public"]["Enums"]["cutter_modality"]
             | null
@@ -382,6 +384,7 @@ export type Database = {
         Update: {
           category?: Database["public"]["Enums"]["product_category"]
           created_at?: string
+          custom_notes?: string | null
           cutter_modality?:
             | Database["public"]["Enums"]["cutter_modality"]
             | null
