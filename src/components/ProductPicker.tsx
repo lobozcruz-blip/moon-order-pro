@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { Search, Tag, X, Check, Package, Sparkles } from "lucide-react";
+import { Search, Tag, X, Check, Package, Sparkles, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,6 +55,7 @@ export function ProductPicker({
   const [localThemeFilter, setLocalThemeFilter] = useState<string>("TODAS");
 
   const [highlightedIndex, setHighlightedIndex] = useState<number>(0);
+  const [displayCount, setDisplayCount] = useState<number>(12);
 
   const localInputRef = useRef<HTMLInputElement>(null);
   const activeInputRef = searchInputRef || localInputRef;
@@ -69,14 +70,16 @@ export function ProductPicker({
   const handleThemeChange = (t: string) => {
     if (onThemeFilterChange) onThemeFilterChange(t);
     else setLocalThemeFilter(t);
+    setDisplayCount(12);
   };
 
-  // Debounce search (200ms)
+  // Debounce search (180ms)
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearch(rawSearch);
       setHighlightedIndex(0);
-    }, 200);
+      setDisplayCount(12);
+    }, 180);
     return () => clearTimeout(handler);
   }, [rawSearch]);
 
@@ -89,6 +92,7 @@ export function ProductPicker({
   const handleCategoryChange = (c: Category | "TODAS") => {
     setLocalCategory(c);
     onCategoryFilterChange?.(c);
+    setDisplayCount(12);
   };
 
   const activeThemes = useMemo(() => themes.filter((t) => t.active), [themes]);
@@ -110,7 +114,7 @@ export function ProductPicker({
       return true;
     });
 
-    if (!term) return list.slice(0, 50);
+    if (!term) return list;
 
     // 2. Coincidencia parcial tipo "contiene"
     const matched = list.filter((p) => {
@@ -129,44 +133,45 @@ export function ProductPicker({
     });
 
     // 3. Ordenamiento por prioridad de relevancia
-    return matched
-      .sort((a, b) => {
-        const aSku = (a.sku ?? "").toLowerCase();
-        const bSku = (b.sku ?? "").toLowerCase();
-        const aName = (a.name ?? "").toLowerCase();
-        const bName = (b.name ?? "").toLowerCase();
+    return matched.sort((a, b) => {
+      const aSku = (a.sku ?? "").toLowerCase();
+      const bSku = (b.sku ?? "").toLowerCase();
+      const aName = (a.name ?? "").toLowerCase();
+      const bName = (b.name ?? "").toLowerCase();
 
-        // 1. Coincidencia exacta de SKU
-        if (aSku === term && bSku !== term) return -1;
-        if (bSku === term && aSku !== term) return 1;
+      // 1. Coincidencia exacta de SKU
+      if (aSku === term && bSku !== term) return -1;
+      if (bSku === term && aSku !== term) return 1;
 
-        // 2. SKU que empiece con el término
-        if (aSku.startsWith(term) && !bSku.startsWith(term)) return -1;
-        if (bSku.startsWith(term) && !aSku.startsWith(term)) return 1;
+      // 2. SKU que empiece con el término
+      if (aSku.startsWith(term) && !bSku.startsWith(term)) return -1;
+      if (bSku.startsWith(term) && !aSku.startsWith(term)) return 1;
 
-        // 3. SKU que contenga el término
-        if (aSku.includes(term) && !bSku.includes(term)) return -1;
-        if (bSku.includes(term) && !aSku.includes(term)) return 1;
+      // 3. SKU que contenga el término
+      if (aSku.includes(term) && !bSku.includes(term)) return -1;
+      if (bSku.includes(term) && !aSku.includes(term)) return 1;
 
-        // 4. Nombre que empiece con el término
-        if (aName.startsWith(term) && !bName.startsWith(term)) return -1;
-        if (bName.startsWith(term) && !aName.startsWith(term)) return 1;
+      // 4. Nombre que empiece con el término
+      if (aName.startsWith(term) && !bName.startsWith(term)) return -1;
+      if (bName.startsWith(term) && !aName.startsWith(term)) return 1;
 
-        // 5. Nombre que contenga el término
-        if (aName.includes(term) && !bName.includes(term)) return -1;
-        if (bName.includes(term) && !aName.includes(term)) return 1;
+      // 5. Nombre que contenga el término
+      if (aName.includes(term) && !bName.includes(term)) return -1;
+      if (bName.includes(term) && !aName.includes(term)) return 1;
 
-        return aName.localeCompare(bName);
-      })
-      .slice(0, 50);
+      return aName.localeCompare(bName);
+    });
   }, [products, debouncedSearch, activeCategory, activeThemeFilter]);
+
+  const displayedProducts = useMemo(() => {
+    return filteredAndSortedProducts.slice(0, displayCount);
+  }, [filteredAndSortedProducts, displayCount]);
 
   const clearAllFilters = () => {
     handleSearchChange("");
     setDebouncedSearch("");
     handleCategoryChange("TODAS");
     handleThemeChange("TODAS");
-    activeInputRef.current?.focus();
   };
 
   const hasActiveFilters =
@@ -181,17 +186,17 @@ export function ProductPicker({
 
   // Teclado: Flechas arriba/abajo y Enter
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (filteredAndSortedProducts.length === 0) return;
+    if (displayedProducts.length === 0) return;
 
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setHighlightedIndex((prev) => Math.min(prev + 1, filteredAndSortedProducts.length - 1));
+      setHighlightedIndex((prev) => Math.min(prev + 1, displayedProducts.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setHighlightedIndex((prev) => Math.max(prev - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const productToSelect = filteredAndSortedProducts[highlightedIndex];
+      const productToSelect = displayedProducts[highlightedIndex];
       if (productToSelect) {
         onSelect(productToSelect);
       }
@@ -199,14 +204,14 @@ export function ProductPicker({
   };
 
   return (
-    <div className={cn("space-y-3 rounded-xl border border-border bg-card/60 p-3.5", className)}>
-      {/* 1. Barra de Búsqueda Universal */}
+    <div className={cn("space-y-3.5", className)}>
+      {/* 1. Barra de Búsqueda Grande Mobile-First */}
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
         <Input
           ref={activeInputRef as any}
-          className="tap pl-9 pr-9 font-medium"
-          placeholder="Buscar por código SKU o nombre (ej. COR-0105, Navidad, Estrella)..."
+          className="tap h-12 rounded-xl pl-11 pr-11 text-base font-medium placeholder:text-muted-foreground/70 bg-card border-border shadow-sm focus-visible:ring-2 focus-visible:ring-primary"
+          placeholder="Buscar por SKU o nombre (ej. COR-0055, Reno)..."
           value={rawSearch}
           onChange={(e) => handleSearchChange(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -218,135 +223,139 @@ export function ProductPicker({
               handleSearchChange("");
               activeInputRef.current?.focus();
             }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            className="tap absolute right-2.5 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground"
+            aria-label="Limpiar búsqueda"
           >
-            <X className="h-4 w-4" />
+            <X className="h-5 w-5" />
           </button>
         )}
       </div>
 
-      {/* 2. Filtros de Categoría y Temática */}
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Categorías */}
-        <div className="flex flex-wrap gap-1">
+      {/* 2. Filtros de Categoría y Temática Adaptativos */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        {/* Categorías deslizables horizontalmente */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar -mx-1 px-1">
           {(["TODAS", ...CATEGORIES] as const).map((c) => (
             <button
               key={c}
               type="button"
               onClick={() => handleCategoryChange(c)}
               className={cn(
-                "chip border text-xs transition-colors",
+                "tap shrink-0 rounded-xl px-3.5 py-2 text-sm font-semibold border transition-all",
                 activeCategory === c
                   ? "bg-primary text-primary-foreground font-bold border-primary shadow-sm"
-                  : "border-border text-muted-foreground hover:bg-secondary",
+                  : "border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground",
               )}
             >
-              {c === "TODAS" ? "Todas" : CATEGORY_META[c].label}
+              {c === "TODAS" ? "Todos" : CATEGORY_META[c].label}
             </button>
           ))}
         </div>
 
         {/* Temática Dropdown */}
-        <Select value={activeThemeFilter} onValueChange={handleThemeChange}>
-          <SelectTrigger className="tap h-8 w-44 text-xs ml-auto sm:ml-0">
-            <Tag className="mr-1.5 h-3.5 w-3.5 text-primary" />
-            <SelectValue placeholder="Temática: Todas" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="TODAS">Todas las temáticas</SelectItem>
-            {activeThemes.map((t) => (
-              <SelectItem key={t.id} value={t.id}>
-                {t.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="shrink-0">
+          <Select value={activeThemeFilter} onValueChange={handleThemeChange}>
+            <SelectTrigger className="tap h-10 w-full sm:w-48 rounded-xl text-sm bg-card border-border">
+              <Tag className="mr-2 h-4 w-4 text-primary shrink-0" />
+              <SelectValue placeholder="Temática: Todas" />
+            </SelectTrigger>
+            <SelectContent className="max-h-64">
+              <SelectItem value="TODAS">Todas las temáticas</SelectItem>
+              {activeThemes.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  {t.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* 3. Chips de filtros activos y Contador */}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground border-t border-border/40 pt-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground pt-1">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span>Filtros activos:</span>
           {activeCategory !== "TODAS" && (
-            <span className="chip flex items-center gap-1 bg-secondary text-foreground text-[11px]">
-              {CATEGORY_META[activeCategory].label}
+            <span className="chip flex items-center gap-1.5 bg-secondary text-foreground text-xs py-1 px-2.5 rounded-lg border border-border">
+              <span>{CATEGORY_META[activeCategory].label}</span>
               <button
                 type="button"
                 onClick={() => handleCategoryChange("TODAS")}
-                className="hover:text-destructive"
+                className="tap hover:text-destructive text-muted-foreground"
+                aria-label="Quitar filtro de categoría"
               >
-                <X className="h-3 w-3" />
+                <X className="h-3.5 w-3.5" />
               </button>
             </span>
           )}
           {selectedThemeName && (
-            <span className="chip flex items-center gap-1 bg-secondary text-foreground text-[11px]">
-              {selectedThemeName}
+            <span className="chip flex items-center gap-1.5 bg-secondary text-foreground text-xs py-1 px-2.5 rounded-lg border border-border">
+              <span>{selectedThemeName}</span>
               <button
                 type="button"
                 onClick={() => handleThemeChange("TODAS")}
-                className="hover:text-destructive"
+                className="tap hover:text-destructive text-muted-foreground"
+                aria-label="Quitar filtro de temática"
               >
-                <X className="h-3 w-3" />
+                <X className="h-3.5 w-3.5" />
               </button>
             </span>
           )}
           {debouncedSearch.trim() && (
-            <span className="chip flex items-center gap-1 bg-secondary text-foreground text-[11px]">
-              "{debouncedSearch.trim()}"
+            <span className="chip flex items-center gap-1.5 bg-secondary text-foreground text-xs py-1 px-2.5 rounded-lg border border-border">
+              <span>"{debouncedSearch.trim()}"</span>
               <button
                 type="button"
                 onClick={() => handleSearchChange("")}
-                className="hover:text-destructive"
+                className="tap hover:text-destructive text-muted-foreground"
+                aria-label="Quitar búsqueda"
               >
-                <X className="h-3 w-3" />
+                <X className="h-3.5 w-3.5" />
               </button>
             </span>
           )}
-          {!hasActiveFilters && <span className="text-[11px] italic">Ninguno</span>}
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="font-medium text-foreground">
-            {filteredAndSortedProducts.length} producto(s)
+        <div className="flex items-center gap-2 ml-auto">
+          <span className="text-xs font-semibold text-foreground">
+            {filteredAndSortedProducts.length} producto{filteredAndSortedProducts.length === 1 ? "" : "s"}
           </span>
           {hasActiveFilters && (
             <button
               type="button"
               onClick={clearAllFilters}
-              className="text-[11px] text-destructive underline hover:text-destructive/80"
+              className="tap text-xs text-destructive font-semibold hover:underline"
             >
-              Limpiar filtros
+              Limpiar
             </button>
           )}
         </div>
       </div>
 
-      {/* 4. Lista Visual de Resultados */}
-      <div className="max-h-56 space-y-1.5 overflow-y-auto pr-1">
+      {/* 4. Lista Visual de Resultados (Tarjetas Táctiles Grandes) */}
+      <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
         {allowManual && (
           <button
             type="button"
             onClick={() => onSelect(null)}
             className={cn(
-              "flex w-full items-center gap-3 rounded-lg border p-2.5 text-left text-xs transition-all",
+              "tap flex w-full items-center gap-3.5 rounded-2xl border p-3.5 text-left transition-all min-h-[68px]",
               !selectedProductId
-                ? "border-primary bg-primary/10 text-foreground font-semibold"
-                : "border-border/60 bg-secondary/40 text-muted-foreground hover:bg-secondary",
+                ? "border-primary bg-primary/10 text-foreground font-semibold ring-1 ring-primary"
+                : "border-border/80 bg-card text-muted-foreground hover:bg-secondary/70",
             )}
           >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-              <Package className="h-5 w-5" />
+            <span className="flex h-13 w-13 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500 font-bold border border-amber-500/30">
+              <Sparkles className="h-6 w-6" />
             </span>
-            <div className="flex-1">
-              <p className="font-semibold text-foreground">Artículo manual / personalizado</p>
-              <p className="text-[11px] text-muted-foreground">Escribir nombre y precio libremente sin catálogo</p>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-base text-foreground">Artículo personalizado / a medida</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Captura libre con imagen de clienta y medidas</p>
             </div>
-            {!selectedProductId && <Check className="h-4 w-4 text-primary" />}
+            {!selectedProductId && <Check className="h-5 w-5 text-primary shrink-0" />}
           </button>
         )}
 
-        {filteredAndSortedProducts.map((p, idx) => {
+        {displayedProducts.map((p, idx) => {
           const isSelected = selectedProductId === p.id;
           const isHighlighted = highlightedIndex === idx;
           const img = (p.product_images ?? []).find((i: any) => i.is_primary) ?? p.product_images?.[0];
@@ -361,60 +370,62 @@ export function ProductPicker({
               onClick={() => onSelect(p)}
               onMouseEnter={() => setHighlightedIndex(idx)}
               className={cn(
-                "flex w-full items-center gap-3 rounded-lg border p-2 text-left text-xs transition-all",
+                "tap flex w-full items-center gap-3.5 rounded-2xl border p-3 text-left transition-all min-h-[72px]",
                 isSelected
-                  ? "border-primary bg-primary/15 text-foreground shadow-sm ring-1 ring-primary"
+                  ? "border-primary bg-primary/15 text-foreground shadow-md ring-2 ring-primary"
                   : isHighlighted
-                    ? "border-primary/50 bg-secondary text-foreground"
-                    : "border-border/60 bg-card hover:bg-secondary/70",
+                    ? "border-primary/60 bg-secondary text-foreground"
+                    : "border-border bg-card hover:bg-secondary/70 hover:border-border",
               )}
             >
-              {/* Miniatura */}
-              <span className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-secondary">
+              {/* Miniatura 52x52 */}
+              <span className="relative flex h-13 w-13 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-secondary">
                 {img ? (
-                  <StoredImage image={img} alt="" className="h-full w-full object-cover" />
+                  <StoredImage image={img} alt={p.name} className="h-full w-full object-contain p-0.5" />
                 ) : (
-                  <Package className="h-5 w-5 text-muted-foreground opacity-40" />
+                  <Package className="h-6 w-6 text-muted-foreground opacity-40" />
                 )}
               </span>
 
-              {/* Info */}
+              {/* Info Principal */}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
-                  <span className="font-mono text-[11px] font-bold text-primary">{p.sku}</span>
+                  <span className="font-mono text-xs font-bold text-primary">{p.sku}</span>
                   <span
-                    className="chip text-[10px] py-0 px-1.5"
+                    className="chip text-[11px] py-0 px-2 font-semibold"
                     style={{
-                      color: `var(--${CATEGORY_META[p.category as keyof typeof CATEGORY_META].token})`,
-                      background: `color-mix(in oklab, var(--${CATEGORY_META[p.category as keyof typeof CATEGORY_META].token}) 16%, transparent)`,
+                      color: `var(--${CATEGORY_META[p.category as keyof typeof CATEGORY_META]?.token ?? "primary"})`,
+                      background: `color-mix(in oklab, var(--${CATEGORY_META[p.category as keyof typeof CATEGORY_META]?.token ?? "primary"}) 16%, transparent)`,
                     }}
                   >
-                    {CATEGORY_META[p.category as keyof typeof CATEGORY_META].label}
+                    {CATEGORY_META[p.category as keyof typeof CATEGORY_META]?.label ?? p.category}
                   </span>
                 </div>
-                <p className="truncate font-semibold text-foreground">{p.name}</p>
+                <p className="truncate font-semibold text-base text-foreground mt-0.5 leading-snug">
+                  {p.name}
+                </p>
                 {prodThemes.length > 0 && (
-                  <div className="mt-0.5 flex flex-wrap gap-1">
-                    {prodThemes.slice(0, 3).map((tName: string) => (
-                      <span key={tName} className="chip bg-secondary text-[9px] py-0 text-muted-foreground">
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {prodThemes.slice(0, 2).map((tName: string) => (
+                      <span key={tName} className="chip bg-secondary text-[10px] py-0 px-1.5 text-muted-foreground">
                         {tName}
                       </span>
                     ))}
-                    {prodThemes.length > 3 && (
-                      <span className="text-[9px] text-muted-foreground">+{prodThemes.length - 3}</span>
+                    {prodThemes.length > 2 && (
+                      <span className="text-[10px] text-muted-foreground font-medium">+{prodThemes.length - 2}</span>
                     )}
                   </div>
                 )}
               </div>
 
-              {/* Precio */}
+              {/* Precio y estado */}
               <div className="shrink-0 text-right">
-                <p className="font-medium text-foreground">
-                  {p.category === "CORTADORES" ? "Precio según tamaño" : money(p.base_price)}
+                <p className="font-bold text-sm text-foreground">
+                  {p.category === "CORTADORES" ? "Según tamaño" : money(p.base_price)}
                 </p>
                 {isSelected && (
-                  <span className="flex items-center justify-end gap-1 text-[10px] text-primary font-bold">
-                    <Check className="h-3.5 w-3.5" /> Seleccionado
+                  <span className="mt-1 flex items-center justify-end gap-1 text-xs text-primary font-bold">
+                    <Check className="h-4 w-4 stroke-[3]" /> Elegido
                   </span>
                 )}
               </div>
@@ -423,9 +434,25 @@ export function ProductPicker({
         })}
 
         {filteredAndSortedProducts.length === 0 && (
-          <p className="py-6 text-center text-xs text-muted-foreground">
-            No se encontraron productos con los filtros aplicados.
-          </p>
+          <div className="rounded-2xl border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+            <Package className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
+            <p className="font-semibold text-foreground">No se encontraron productos</p>
+            <p className="text-xs text-muted-foreground mt-1">Prueba con otra palabra clave o añade un artículo a medida.</p>
+          </div>
+        )}
+
+        {/* Botón Cargar Más */}
+        {filteredAndSortedProducts.length > displayedProducts.length && (
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="tap w-full h-11 text-sm font-semibold rounded-xl mt-2 border-border"
+            onClick={() => setDisplayCount((prev) => prev + 15)}
+          >
+            <ChevronDown className="mr-1.5 h-4 w-4 text-primary" />
+            Mostrar más productos ({filteredAndSortedProducts.length - displayedProducts.length} restantes)
+          </Button>
         )}
       </div>
     </div>

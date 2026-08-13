@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState, useRef } from "react";
 import {
   Plus,
+  Minus,
   Trash2,
   Loader2,
   Search,
@@ -15,6 +16,15 @@ import {
   Eye,
   RotateCcw,
   ImageIcon,
+  ChevronDown,
+  ChevronUp,
+  MoreVertical,
+  AlertCircle,
+  Truck,
+  MapPin,
+  FileText,
+  User,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/AppShell";
@@ -36,6 +46,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import {
   useCustomers,
@@ -141,7 +164,7 @@ function NuevoPedido() {
   const { data: themes = [] } = useProductThemes();
   const invalidate = useInvalidate();
 
-  // Cliente
+  // 1. Cliente
   const [customerId, setCustomerId] = useState<string>("");
   const [newCustomer, setNewCustomer] = useState({
     first_name: "",
@@ -150,8 +173,9 @@ function NuevoPedido() {
     contact_channel: "WhatsApp",
   });
   const [customerSearch, setCustomerSearch] = useState("");
+  const [isCustomerEditing, setIsCustomerEditing] = useState(false);
 
-  // Pedido
+  // 2. Pedido Meta
   const [priority, setPriority] = useState<Priority>("normal");
   const [dueDate, setDueDate] = useState("");
   const [assignee, setAssignee] = useState<string>("");
@@ -159,7 +183,7 @@ function NuevoPedido() {
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Entrega
+  // 3. Entrega
   const [deliveryType, setDeliveryType] = useState<DeliveryType>("envio");
   const [shipping, setShipping] = useState({
     first_name: "",
@@ -188,13 +212,8 @@ function NuevoPedido() {
     instructions: "",
   });
 
-  // ==========================================
-  // ESTADO DE ARTÍCULOS (UX ÁGIL)
-  // ==========================================
-  // 1. Artículos ya confirmados en el pedido (inicia vacío [])
+  // 4. Estado de Artículos
   const [items, setItems] = useState<Item[]>([]);
-
-  // 2. Parámetros recordados para captura rápida consecutiva
   const [lastModality, setLastModality] = useState<Modality>("cutter_only");
   const [lastSize, setLastSize] = useState<number>(8);
   const [categoryFilter, setCategoryFilter] = useState<Category | "TODAS">("TODAS");
@@ -202,117 +221,135 @@ function NuevoPedido() {
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
-  // 3. Artículo actualmente en configuración (draft)
-  const [draftItem, setDraftItem] = useState<Item>(() =>
-    createEmptyDraft("CORTADORES", "cutter_only", 8),
-  );
-  const [draftPriceInput, setDraftPriceInput] = useState<string>("0");
-  // Modo artículo manual / personalizado (sin catálogo)
+  // Producto seleccionado actualmente (cuando se elige uno del catálogo)
+  const [selectedCatalogProduct, setSelectedCatalogProduct] = useState<any | null>(null);
   const [manualMode, setManualMode] = useState(false);
 
-  // 4. Diálogo de edición para productos ya confirmados
+  // Draft del artículo en configuración
+  const [draftItem, setDraftItem] = useState<Item>(createEmptyDraft());
+  const [priceInput, setPriceInput] = useState<string>("0");
+
+  // Modales y Visores
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [editingPriceInput, setEditingPriceInput] = useState<string>("0");
-  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [viewerItem, setViewerItem] = useState<{
+    title: string;
+    productSku?: string | null;
+    isCustom?: boolean;
+    customNotes?: string | null;
+    customImages?: any[];
+    catalogImages?: any[];
+  } | null>(null);
 
-  // 5. Modal de visualización de diseño personalizado (1-tap)
-  const [viewerItem, setViewerItem] = useState<Item | null>(null);
+  // Resumen Móvil (Bottom Sheet)
+  const [isMobileSummaryOpen, setIsMobileSummaryOpen] = useState(false);
 
-  // 6. Diálogos posteriores al guardado exitoso
+  // Diálogo de Éxito
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
-  const [showSummaryModal, setShowSummaryModal] = useState(false);
-  const [createdOrderSummary, setCreatedOrderSummary] = useState<SummaryOrderData | null>(null);
   const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
+  const [createdOrderSummary, setCreatedOrderSummary] = useState<SummaryOrderData | null>(null);
 
-  // Filtrado de clientes
+  // Diálogo de Error de Guardado con Reintento
+  const [saveErrorDialog, setSaveErrorDialog] = useState<{
+    open: boolean;
+    message: string;
+  }>({
+    open: false,
+    message: "",
+  });
+
+  // Filtro de Clientes
   const filteredCustomers = useMemo(() => {
-    const t = customerSearch.trim().toLowerCase();
-    return (customers ?? []).filter(
-      (c) =>
-        !t ||
-        fullName(c.first_name, c.last_name).toLowerCase().includes(t) ||
-        (c.phone ?? "").includes(t),
-    );
+    if (!customerSearch.trim() || !customers) return [];
+    const q = customerSearch.toLowerCase().trim();
+    return customers
+      .filter((c) => {
+        const fn = fullName(c.first_name, c.last_name).toLowerCase();
+        const ph = (c.phone ?? "").toLowerCase();
+        return fn.includes(q) || ph.includes(q);
+      })
+      .slice(0, 8);
   }, [customers, customerSearch]);
 
-  // Cálculo de precio para cualquier artículo
+  // Cálculo de precio unitario
   const computedPrice = (it: Item) => {
-    if (it.price_overridden) return it.unit_price;
+    if (it.price_overridden) return Number(it.unit_price || 0);
     if (it.category === "CORTADORES") {
-      return priceFor(rules, it.cutter_modality, it.cutter_size_cm);
+      return priceFor(rules, it.cutter_modality || "cutter_only", it.cutter_size_cm || 8);
     }
     const p = products.find((x) => x.id === it.product_id);
     return Number(p?.base_price ?? it.unit_price ?? 0);
   };
 
-  // Precios y totales
-  const draftUnitPrice = computedPrice(draftItem);
-  const draftSubtotal = draftUnitPrice * draftItem.quantity;
+  // Precios en vivo
+  const currentDraftUnitPrice = computedPrice(draftItem);
+  const currentDraftSubtotal = currentDraftUnitPrice * (draftItem.quantity || 1);
 
-  const subtotal = items.reduce((a, it) => a + computedPrice(it) * it.quantity, 0);
+  // Totales generales
+  const subtotal = useMemo(() => {
+    return items.reduce((acc, it) => acc + computedPrice(it) * it.quantity, 0);
+  }, [items, rules, products]);
+
+  const discountNum = Math.max(0, Number(discount) || 0);
   const shippingCost =
-    deliveryType === "envio"
-      ? parseFloat(String(shipping.shipping_cost || 0).replace(",", ".")) || 0
-      : 0;
-  const discountNum = parseFloat(String(discount || 0).replace(",", ".")) || 0;
+    deliveryType === "envio" ? Math.max(0, Number(shipping.shipping_cost) || 0) : 0;
   const total = Math.max(0, subtotal - discountNum + shippingCost);
-  const totalUnits = items.reduce((a, it) => a + it.quantity, 0);
 
-  // ==========================================
-  // MANEJO DE SELECCIÓN DE PRODUCTO
-  // ==========================================
+  // Selección de Producto del Catálogo
   const handleProductSelect = (p: any | null) => {
     if (!p) {
-      // Modo manual
+      // Modo manual / a medida
       setManualMode(true);
-      setDraftPriceInput("0");
-      setDraftItem((prev) => ({
-        ...prev,
-        product_id: null,
-        product_sku: null,
-        product_name: "",
-        category: prev.category || "CORTADORES",
-        unit_price: 0,
-        price_overridden: false,
-        image_preview: null,
-      }));
+      setSelectedCatalogProduct(null);
+      setPriceInput("0");
+      setDraftItem({
+        ...createEmptyDraft("CORTADORES", lastModality, lastSize),
+        is_custom: true, // Por defecto un artículo manual es personalizado
+      });
       return;
     }
 
     setManualMode(false);
-    const isCutter = p.category === "CORTADORES";
-    const img = (p.product_images ?? []).find((i: any) => i.is_primary) ?? p.product_images?.[0];
-    const initialPrice = isCutter ? 0 : Number(p.base_price ?? 0);
-    setDraftPriceInput(String(initialPrice));
+    setSelectedCatalogProduct(p);
 
-    setDraftItem((prev) => ({
-      ...prev,
+    const isCutter = p.category === "CORTADORES";
+    const initialPrice = isCutter
+      ? priceFor(rules, lastModality, lastSize)
+      : Number(p.base_price ?? 0);
+
+    setPriceInput(String(initialPrice));
+    setDraftItem({
+      key: crypto.randomUUID(),
+      category: p.category,
       product_id: p.id,
       product_name: p.name,
       product_sku: p.sku,
-      category: p.category,
-      cutter_modality: isCutter ? prev.cutter_modality || lastModality : null,
-      cutter_size_cm: isCutter ? prev.cutter_size_cm || lastSize : null,
+      description: p.description ?? "",
+      quantity: 1,
+      cutter_modality: isCutter ? lastModality : null,
+      cutter_size_cm: isCutter ? lastSize : null,
       unit_price: initialPrice,
       price_overridden: false,
-      image_preview: img,
-    }));
+      price_override_reason: null,
+      notes: "",
+      is_custom: false,
+      custom_images: [],
+      image_preview: p.product_images?.[0] ?? null,
+    });
   };
 
-  // ==========================================
-  // AÑADIR DRAFT AL PEDIDO
-  // ==========================================
+  // Añadir artículo configurado al pedido
   const addDraftToOrder = () => {
     if (!draftItem.product_name.trim()) {
-      toast.error("Selecciona un producto o escribe su nombre");
+      toast.error("Selecciona un producto o ingresa un nombre para el artículo.");
       return;
     }
     if (draftItem.quantity <= 0) {
-      toast.error("La cantidad debe ser al menos 1");
+      toast.error("La cantidad debe ser al menos 1 pieza.");
       return;
     }
 
-    // VALIDACIÓN ESTRICTA: Imagen obligatoria si es personalizado
+    // VALIDACIÓN ESTRICTA: Si es personalizado, requiere al menos 1 imagen
     if (draftItem.is_custom && draftItem.custom_images.length === 0) {
       toast.error(
         "Añade al menos una imagen del diseño personalizado para poder fabricar este artículo.",
@@ -320,105 +357,67 @@ function NuevoPedido() {
       return;
     }
 
-    const calculatedUnitPrice = computedPrice(draftItem);
     const itemToAdd: Item = {
       ...draftItem,
-      unit_price: calculatedUnitPrice,
-      key: crypto.randomUUID(),
+      unit_price: draftItem.price_overridden
+        ? Number(priceInput || 0)
+        : computedPrice(draftItem),
     };
 
-    // Actualizar modalidades recordadas si es cortador
+    setItems((prev) => [...prev, itemToAdd]);
+
+    // Recordar última configuración de cortador
     if (draftItem.category === "CORTADORES") {
       if (draftItem.cutter_modality) setLastModality(draftItem.cutter_modality);
       if (draftItem.cutter_size_cm) setLastSize(draftItem.cutter_size_cm);
     }
 
-    // Comprobar si existe un producto idéntico para sumar cantidades
-    // (Solo agrupamos si NO es personalizado o si tienen exactamente las mismas notas y sin imágenes específicas)
-    const existingIndex = items.findIndex((it) => {
-      if (it.is_custom || draftItem.is_custom) return false; // Los personalizados se mantienen como líneas independientes
-      const sameProduct = it.product_id && it.product_id === draftItem.product_id;
-      const sameName =
-        it.product_name.trim().toLowerCase() === draftItem.product_name.trim().toLowerCase();
-      const sameCategory = it.category === draftItem.category;
-      const sameModality = it.cutter_modality === draftItem.cutter_modality;
-      const sameSize = it.cutter_size_cm === draftItem.cutter_size_cm;
-      const sameNotes = (it.notes || "").trim() === (draftItem.notes || "").trim();
-      const samePrice = computedPrice(it) === calculatedUnitPrice;
-
-      return (
-        (sameProduct || sameName) &&
-        sameCategory &&
-        sameModality &&
-        sameSize &&
-        sameNotes &&
-        samePrice
-      );
-    });
-
-    if (existingIndex >= 0) {
-      // Sumar cantidad al producto existente
-      setItems((prev) =>
-        prev.map((it, idx) =>
-          idx === existingIndex ? { ...it, quantity: it.quantity + draftItem.quantity } : it,
-        ),
-      );
-      toast.success(
-        `Cantidad actualizada: ${(items[existingIndex]?.quantity ?? 0) + draftItem.quantity} piezas para "${draftItem.product_name}"`,
-      );
-    } else {
-      // Añadir nueva fila
-      setItems((prev) => [...prev, itemToAdd]);
-      toast.success(
-        draftItem.is_custom
-          ? `Artículo personalizado "${draftItem.product_name}" añadido con ${draftItem.custom_images.length} imagen(es)`
-          : `"${draftItem.product_name}" añadido al pedido`,
-      );
-    }
-
-    // 1. Reiniciar draftItem conservando categoría, modalidad y tamaño pero limpiando imágenes
-    const nextModality = draftItem.cutter_modality || lastModality;
-    const nextSize = draftItem.cutter_size_cm || lastSize;
-
+    // Limpiar selección para siguiente captura inmediata
+    setSelectedCatalogProduct(null);
     setManualMode(false);
-    setDraftItem({
-      ...createEmptyDraft(draftItem.category, nextModality, nextSize),
-      is_custom: false,
-      custom_images: [],
-    });
-    setDraftPriceInput("0");
     setSearchQuery("");
+    setDraftItem(createEmptyDraft(draftItem.category, lastModality, lastSize));
+    setPriceInput("0");
 
-    // 2. Regresar el foco al buscador
-    setTimeout(() => {
+    toast.success("Producto añadido al pedido", { duration: 1800 });
+
+    // En pantallas grandes se enfoca el buscador; en móvil evitamos levantar el teclado forzado
+    if (window.innerWidth >= 1024) {
       searchInputRef.current?.focus();
-    }, 50);
+    }
   };
 
-  // ==========================================
-  // EDICIÓN DE ARTÍCULO YA AÑADIDO
-  // ==========================================
-  const startEditItem = (it: Item) => {
+  // Duplicar artículo existente
+  const duplicateItem = (it: Item) => {
+    const cloned: Item = {
+      ...it,
+      key: crypto.randomUUID(),
+      custom_images: it.custom_images.map((img) => ({
+        ...img,
+        id: crypto.randomUUID(),
+      })),
+    };
+    setItems((prev) => [...prev, cloned]);
+    toast.success(`"${it.product_name}" duplicado`);
+  };
+
+  // Eliminar artículo
+  const removeItem = (key: string) => {
+    setItems((prev) => prev.filter((i) => i.key !== key));
+  };
+
+  // Abrir edición de un artículo existente
+  const openEditModal = (it: Item) => {
     setEditingItem({
       ...it,
       custom_images: [...it.custom_images],
     });
     setEditingPriceInput(String(it.unit_price));
-    setIsEditOpen(true);
   };
 
+  // Guardar cambios de edición
   const saveEditedItem = () => {
     if (!editingItem) return;
-
-    if (!editingItem.product_name.trim()) {
-      toast.error("El nombre no puede estar vacío");
-      return;
-    }
-    if (editingItem.quantity <= 0) {
-      toast.error("La cantidad debe ser al menos 1");
-      return;
-    }
-
     if (editingItem.is_custom && editingItem.custom_images.length === 0) {
       toast.error(
         "Añade al menos una imagen del diseño personalizado para poder fabricar este artículo.",
@@ -426,85 +425,53 @@ function NuevoPedido() {
       return;
     }
 
+    const updatedPrice = editingItem.price_overridden
+      ? Number(editingPriceInput || 0)
+      : computedPrice(editingItem);
+
     setItems((prev) =>
-      prev.map((it) => (it.key === editingItem.key ? { ...editingItem } : it)),
+      prev.map((i) =>
+        i.key === editingItem.key
+          ? {
+              ...editingItem,
+              unit_price: updatedPrice,
+            }
+          : i,
+      ),
     );
-    toast.success(`Artículo "${editingItem.product_name}" actualizado`);
-    setIsEditOpen(false);
+
     setEditingItem(null);
+    toast.success("Artículo actualizado");
   };
 
-  // ==========================================
-  // DUPLICAR ARTÍCULO
-  // ==========================================
-  const duplicateItem = (key: string) => {
-    const itemToDup = items.find((it) => it.key === key);
-    if (!itemToDup) return;
-
-    const duplicated: Item = {
-      ...itemToDup,
-      key: crypto.randomUUID(),
-      // Clonar referencias de imágenes con IDs independientes
-      custom_images: itemToDup.custom_images.map((img) => ({
-        ...img,
-        id: crypto.randomUUID(),
-      })),
-    };
-
-    setItems((prev) => [...prev, duplicated]);
-    toast.success(`"${itemToDup.product_name}" duplicado`);
-  };
-
-  // ==========================================
-  // ELIMINAR ARTÍCULO
-  // ==========================================
-  const removeItem = (key: string) => {
-    setItems((prev) => prev.filter((it) => it.key !== key));
-  };
-
-  // ==========================================
-  // REINICIAR FORMULARIO COMPLETO
-  // ==========================================
-  const resetForm = () => {
-    setItems([]);
-    setCustomerId("");
-    setNewCustomer({ first_name: "", last_name: "", phone: "", contact_channel: "WhatsApp" });
-    setCustomerSearch("");
-    setPriority("normal");
-    setDueDate("");
-    setAssignee("");
-    setDiscount("0");
-    setNote("");
-    setManualMode(false);
-    setDraftItem(createEmptyDraft("CORTADORES", lastModality, lastSize));
-    setDraftPriceInput("0");
-    setSearchQuery("");
-    setShowSuccessDialog(false);
-    setCreatedOrderId(null);
-    setCreatedOrderSummary(null);
-  };
-
-  // ==========================================
-  // GUARDAR PEDIDO
-  // ==========================================
+  // Guardar Pedido en Supabase
   const save = async () => {
     if (items.length === 0) {
-      if (draftItem.product_name.trim()) {
-        toast.error(
-          "Tienes un producto seleccionado en el configurador. Pulsa 'Añadir al pedido' antes de guardar.",
-        );
-      } else {
-        toast.error("Añade al menos un producto al pedido.");
+      toast.error("Añade al menos un producto al pedido.");
+      return;
+    }
+
+    let cid = customerId;
+    if (!cid) {
+      if (!newCustomer.first_name.trim()) {
+        toast.error("Elige un cliente o escribe su nombre.");
+        // Abrir sección de cliente en móvil
+        setIsCustomerEditing(true);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
       }
+    }
+
+    if (deliveryType === "entrega_personal" && !delivery.place.trim()) {
+      toast.error("Indica el lugar de entrega personal.");
+      setIsMobileSummaryOpen(true);
       return;
     }
 
     setSaving(true);
     try {
-      let cid = customerId;
       if (!cid) {
-        if (!newCustomer.first_name.trim()) throw new Error("Elige un cliente o escribe su nombre");
-        const { data, error } = await supabase
+        const { data: custData, error: custErr } = await supabase
           .from("customers")
           .insert({
             first_name: newCustomer.first_name.trim(),
@@ -514,10 +481,11 @@ function NuevoPedido() {
           })
           .select("id")
           .single();
-        if (error) throw error;
-        cid = data.id;
+        if (custErr) throw custErr;
+        cid = custData.id;
       }
 
+      // 1. Crear Orden
       const { data: order, error: oErr } = await supabase
         .from("orders")
         .insert({
@@ -535,7 +503,7 @@ function NuevoPedido() {
         .single();
       if (oErr) throw oErr;
 
-      // Inserción de order_items con is_custom
+      // 2. Insertar Artículos con is_custom
       const rows = items.map((it, idx) => ({
         order_id: order.id,
         category: it.category,
@@ -560,9 +528,12 @@ function NuevoPedido() {
         .insert(rows)
         .select("id, sort_order");
 
-      if (iErr) throw iErr;
+      if (iErr) {
+        console.error("Error inserting order_items:", iErr);
+        throw iErr;
+      }
 
-      // Subir y guardar imágenes de diseño personalizado para cada order_item
+      // 3. Subir imágenes físicas a Storage y crear registros en order_item_images
       for (let idx = 0; idx < items.length; idx++) {
         const it = items[idx];
         const createdItem = createdItems?.[idx];
@@ -580,7 +551,7 @@ function NuevoPedido() {
             } catch (err: any) {
               console.error("Error uploading custom image:", err);
               toast.error(
-                `No se pudo guardar la imagen de referencia de "${it.product_name}". Intenta nuevamente.`,
+                `No se pudo guardar la imagen de referencia de "${it.product_name}".`,
               );
               throw err;
             }
@@ -590,7 +561,7 @@ function NuevoPedido() {
             const { error: imgErr } = await supabase.from("order_item_images").insert({
               order_item_id: createdItem.id,
               storage_path: storagePath,
-              is_primary: customImg.is_primary,
+              is_primary: customImg.is_primary ?? false,
               image_type: "custom_reference",
               sort_order: imgIdx,
             });
@@ -599,6 +570,7 @@ function NuevoPedido() {
         }
       }
 
+      // 4. Detalles de Entrega
       if (deliveryType === "envio") {
         await supabase.from("shipping_details").insert({
           order_id: order.id,
@@ -631,6 +603,7 @@ function NuevoPedido() {
         });
       }
 
+      // 5. Notas generales del pedido
       if (note.trim()) {
         const { data: u } = await supabase.auth.getUser();
         await supabase.from("order_notes").insert({
@@ -643,7 +616,7 @@ function NuevoPedido() {
       await supabase.rpc("assign_folio", { _order_id: order.id });
       await logActivity({ action: "Pedido creado", entity: "order", order_id: order.id });
 
-      // Obtener el folio asignado
+      // Obtener folio final
       const { data: updatedOrder } = await supabase
         .from("orders")
         .select("folio, created_at")
@@ -695,11 +668,28 @@ function NuevoPedido() {
       setShowSuccessDialog(true);
       invalidate("orders", "production-queue", "dashboard-sales-summary", "sales-analytics");
     } catch (e: any) {
-      toast.error(e.message ?? "Error al guardar el pedido");
+      console.error("Error saving order:", e);
+      const isSchemaCacheError =
+        e?.message?.includes("is_custom") ||
+        e?.message?.includes("schema cache") ||
+        e?.code === "PGRST204" ||
+        e?.code === "42703";
+
+      setSaveErrorDialog({
+        open: true,
+        message: isSchemaCacheError
+          ? "No pudimos guardar el pedido porque la base de datos todavía está actualizando su estructura en Supabase. Tus datos y fotos siguen intactos aquí. Presiona Reintentar."
+          : (e?.message ?? "Error inesperado al guardar el pedido. Tus datos siguen guardados en pantalla."),
+      });
     } finally {
       setSaving(false);
     }
   };
+
+  // Datos del cliente seleccionado
+  const selectedCustomerObj = customers?.find((c) => c.id === customerId);
+  const isCustomerReady =
+    Boolean(customerId) || Boolean(newCustomer.first_name.trim());
 
   return (
     <>
@@ -708,287 +698,288 @@ function NuevoPedido() {
         subtitle="Captura rápida de productos y personalizaciones para el taller"
       />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-        {/* COLUMNA PRINCIPAL */}
-        <div className="space-y-6">
-          {/* 1. SECCIÓN CLIENTE */}
-          <section className="panel p-4 sm:p-5">
-            <h2 className="mb-3 font-display text-lg">1. Cliente</h2>
-            <div className="space-y-3">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  className="tap pl-9 text-sm"
-                  placeholder="Buscar cliente existente por nombre o teléfono…"
-                  value={customerSearch}
-                  onChange={(e) => setCustomerSearch(e.target.value)}
-                />
+      {/* CONTENEDOR PRINCIPAL: Padding inferior extra para la barra móvil sticky */}
+      <div className="pb-36 lg:pb-12">
+        <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+          {/* ========================================== */}
+          {/* COLUMNA PRINCIPAL DE CAPTURA */}
+          {/* ========================================== */}
+          <div className="space-y-6">
+            {/* 1. SECCIÓN CLIENTE (COLAPSABLE EN MÓVIL Y DESKTOP) */}
+            <section className="panel p-4 sm:p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="font-display text-lg font-bold flex items-center gap-2">
+                  <User className="h-5 w-5 text-primary" />
+                  <span>1. Cliente</span>
+                </h2>
+                {isCustomerReady && !isCustomerEditing && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="tap text-sm text-primary font-semibold hover:bg-primary/10"
+                    onClick={() => setIsCustomerEditing(true)}
+                  >
+                    <Pencil className="mr-1.5 h-3.5 w-3.5" /> Editar cliente
+                  </Button>
+                )}
               </div>
 
-              {customerSearch && (
-                <div className="max-h-48 overflow-y-auto divide-y divide-border rounded-lg border border-border bg-background">
-                  {filteredCustomers.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => {
-                        setCustomerId(c.id);
-                        setCustomerSearch("");
-                      }}
-                      className="tap flex w-full items-center justify-between p-2.5 text-left text-xs hover:bg-secondary"
-                    >
-                      <span className="font-semibold">{fullName(c.first_name, c.last_name)}</span>
-                      <span className="text-muted-foreground">{c.phone}</span>
-                    </button>
-                  ))}
-                  {filteredCustomers.length === 0 && (
-                    <p className="p-3 text-center text-xs text-muted-foreground">
-                      No se encontró ningún cliente. Puedes registrarlo abajo.
+              {/* Vista compacta cuando el cliente ya está asignado */}
+              {isCustomerReady && !isCustomerEditing ? (
+                <div className="flex items-center justify-between rounded-2xl bg-primary/10 border border-primary/20 p-4 transition-all">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold uppercase tracking-wider text-primary">
+                      Cliente del pedido:
                     </p>
-                  )}
-                </div>
-              )}
-
-              {customerId ? (
-                <div className="flex items-center justify-between rounded-lg bg-primary/10 p-3 text-sm text-primary">
-                  <div>
-                    <span className="font-semibold">
-                      {fullName(
-                        customers?.find((c) => c.id === customerId)?.first_name,
-                        customers?.find((c) => c.id === customerId)?.last_name,
-                      )}
-                    </span>
-                    <p className="text-xs text-muted-foreground">
-                      {customers?.find((c) => c.id === customerId)?.phone}
+                    <p className="text-base font-bold text-foreground mt-0.5 truncate">
+                      {selectedCustomerObj
+                        ? fullName(selectedCustomerObj.first_name, selectedCustomerObj.last_name)
+                        : fullName(newCustomer.first_name, newCustomer.last_name)}
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      {selectedCustomerObj?.phone || newCustomer.phone || "Sin teléfono registrado"}
                     </p>
                   </div>
                   <Button
-                    variant="ghost"
+                    type="button"
+                    variant="outline"
                     size="sm"
-                    className="tap text-xs"
-                    onClick={() => setCustomerId("")}
+                    className="tap h-9 text-sm font-semibold rounded-xl shrink-0"
+                    onClick={() => {
+                      setCustomerId("");
+                      setIsCustomerEditing(true);
+                    }}
                   >
                     Cambiar
                   </Button>
                 </div>
               ) : (
-                <div className="grid gap-3 pt-1 sm:grid-cols-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Nombre *</Label>
+                /* Formulario completo de búsqueda o registro de cliente */
+                <div className="space-y-3.5">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                     <Input
-                      className="tap h-9 text-sm"
-                      placeholder="Nombre del cliente"
-                      value={newCustomer.first_name}
-                      onChange={(e) =>
-                        setNewCustomer({ ...newCustomer, first_name: e.target.value })
-                      }
+                      className="tap h-12 rounded-xl pl-11 text-base font-medium placeholder:text-muted-foreground/70 bg-card border-border"
+                      placeholder="Buscar cliente existente por nombre o teléfono..."
+                      value={customerSearch}
+                      onChange={(e) => setCustomerSearch(e.target.value)}
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Apellido</Label>
-                    <Input
-                      className="tap h-9 text-sm"
-                      placeholder="Apellido (opcional)"
-                      value={newCustomer.last_name}
-                      onChange={(e) =>
-                        setNewCustomer({ ...newCustomer, last_name: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Teléfono</Label>
-                    <Input
-                      className="tap h-9 text-sm"
-                      placeholder="Teléfono / WhatsApp"
-                      value={newCustomer.phone}
-                      onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
-                    />
+
+                  {customerSearch && (
+                    <div className="max-h-52 overflow-y-auto divide-y divide-border rounded-2xl border border-border bg-background shadow-md">
+                      {filteredCustomers.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            setCustomerId(c.id);
+                            setCustomerSearch("");
+                            setIsCustomerEditing(false);
+                          }}
+                          className="tap flex w-full items-center justify-between p-3.5 text-left text-sm hover:bg-secondary transition-all"
+                        >
+                          <span className="font-bold text-foreground">
+                            {fullName(c.first_name, c.last_name)}
+                          </span>
+                          <span className="text-muted-foreground font-mono text-xs">
+                            {c.phone || "Sin teléfono"}
+                          </span>
+                        </button>
+                      ))}
+                      {filteredCustomers.length === 0 && (
+                        <p className="p-4 text-center text-sm text-muted-foreground">
+                          No se encontró ningún cliente registrado. Puedes completar los datos abajo:
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Campos de Nuevo Cliente */}
+                  <div className="rounded-2xl border border-border bg-secondary/20 p-4 space-y-3">
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      O registrar nuevo cliente:
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="space-y-1">
+                        <Label className="text-sm font-semibold">Nombre *</Label>
+                        <Input
+                          className="tap h-11 text-base rounded-xl bg-card border-border"
+                          placeholder="Nombre"
+                          value={newCustomer.first_name}
+                          onChange={(e) =>
+                            setNewCustomer({ ...newCustomer, first_name: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-sm font-semibold">Apellido</Label>
+                        <Input
+                          className="tap h-11 text-base rounded-xl bg-card border-border"
+                          placeholder="Apellido (opcional)"
+                          value={newCustomer.last_name}
+                          onChange={(e) =>
+                            setNewCustomer({ ...newCustomer, last_name: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-sm font-semibold">Teléfono / WhatsApp</Label>
+                        <Input
+                          className="tap h-11 text-base rounded-xl bg-card border-border"
+                          placeholder="Teléfono"
+                          value={newCustomer.phone}
+                          onChange={(e) =>
+                            setNewCustomer({ ...newCustomer, phone: e.target.value })
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    {isCustomerReady && isCustomerEditing && (
+                      <div className="flex justify-end pt-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="tap h-9 text-sm font-bold bg-primary text-primary-foreground rounded-xl"
+                          onClick={() => setIsCustomerEditing(false)}
+                        >
+                          <Check className="mr-1.5 h-4 w-4" /> Listo, continuar
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
-            </div>
-          </section>
+            </section>
 
-          {/* 2. SECCIÓN CONFIGURADOR DE ARTÍCULO RÁPIDO */}
-          <section className="panel p-4 sm:p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-border pb-3">
-              <div>
-                <h2 className="font-display text-lg flex items-center gap-2">
-                  <span>2. Catálogo & Configuración de Producto</span>
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  Elige un producto o configúralo como personalizado con sus fotos de diseño.
-                </p>
+            {/* 2. SECCIÓN CATÁLOGO & CAPTURA DE ARTÍCULO */}
+            <section className="panel p-4 sm:p-5 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
+                <div>
+                  <h2 className="font-display text-lg font-bold flex items-center gap-2">
+                    <Package className="h-5 w-5 text-primary" />
+                    <span>2. Añadir Productos al Pedido</span>
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Busca en catálogo o crea un diseño personalizado con sus imágenes de fabricación.
+                  </p>
+                </div>
+
+                {!selectedCatalogProduct && (
+                  <Button
+                    type="button"
+                    variant={manualMode ? "secondary" : "outline"}
+                    size="sm"
+                    className="tap text-sm font-bold rounded-xl"
+                    onClick={() => handleProductSelect(null)}
+                  >
+                    <Sparkles className="mr-1.5 h-4 w-4 text-amber-400" />
+                    Artículo a medida
+                  </Button>
+                )}
               </div>
 
-              <Button
-                type="button"
-                variant={manualMode ? "secondary" : "outline"}
-                size="sm"
-                className="tap text-xs font-semibold"
-                onClick={() => handleProductSelect(null)}
-              >
-                <Sparkles className="mr-1 h-3.5 w-3.5 text-amber-400" />
-                Artículo manual / a medida
-              </Button>
-            </div>
+              {/* Si NO hay producto seleccionado, mostramos el Buscador y Catálogo */}
+              {!selectedCatalogProduct && !manualMode && (
+                <ProductPicker
+                  products={products}
+                  themes={themes}
+                  selectedProductId={draftItem.product_id}
+                  onSelect={handleProductSelect}
+                  categoryFilter={categoryFilter}
+                  onCategoryFilterChange={setCategoryFilter}
+                  themeFilter={themeFilter}
+                  onThemeFilterChange={setThemeFilter}
+                  searchQuery={searchQuery}
+                  onSearchQueryChange={setSearchQuery}
+                  searchInputRef={searchInputRef}
+                />
+              )}
 
-            {/* Picker de Productos Universal con Temáticas */}
-            {!manualMode && (
-              <ProductPicker
-                products={products}
-                themes={themes}
-                selectedId={draftItem.product_id}
-                onSelect={handleProductSelect}
-                categoryFilter={categoryFilter}
-                onCategoryFilterChange={setCategoryFilter}
-                themeFilter={themeFilter}
-                onThemeFilterChange={setThemeFilter}
-                searchQuery={searchQuery}
-                onSearchQueryChange={setSearchQuery}
-                searchInputRef={searchInputRef}
-              />
-            )}
-
-            {/* CONFIGURADOR DEL ARTÍCULO DRAFT */}
-            <div className="rounded-2xl border-2 border-primary/40 bg-card p-4 shadow-sm space-y-4">
-              {draftItem.product_name || manualMode ? (
+              {/* Si YA se seleccionó un producto o modo manual, ocultamos el catálogo y mostramos la configuración limpia */}
+              {(selectedCatalogProduct || manualMode) && (
                 <div className="space-y-4 animate-in fade-in-50 duration-200">
-                  {/* Encabezado del artículo en configuración */}
-                  <div className="flex items-center justify-between border-b border-border pb-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        {draftItem.product_sku && (
-                          <span className="font-mono text-xs font-bold text-primary">
-                            {draftItem.product_sku}
-                          </span>
+                  {/* Tarjeta de Producto Seleccionado */}
+                  <div className="flex items-center justify-between gap-3 rounded-2xl border-2 border-primary bg-primary/10 p-4">
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <span className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-card">
+                        {draftItem.image_preview ? (
+                          <StoredImage
+                            image={draftItem.image_preview}
+                            alt={draftItem.product_name}
+                            className="h-full w-full object-contain p-1"
+                          />
+                        ) : (
+                          <Sparkles className="h-7 w-7 text-amber-400" />
                         )}
-                        <span
-                          className="chip text-[10px] py-0 px-2 font-bold"
-                          style={{
-                            color: `var(--${CATEGORY_META[draftItem.category]?.token ?? "primary"})`,
-                            background: `color-mix(in oklab, var(--${CATEGORY_META[draftItem.category]?.token ?? "primary"}) 16%, transparent)`,
-                          }}
-                        >
-                          {CATEGORY_META[draftItem.category]?.label ?? draftItem.category}
-                        </span>
-                        {draftItem.is_custom && (
-                          <span className="chip text-[10px] py-0 px-2 bg-amber-500/15 text-amber-400 font-bold flex items-center gap-1">
-                            <Sparkles className="h-2.5 w-2.5" /> Personalizado
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          {draftItem.product_sku && (
+                            <span className="font-mono text-xs font-bold text-primary">
+                              {draftItem.product_sku}
+                            </span>
+                          )}
+                          <span className="chip text-xs py-0.5 px-2 font-bold bg-primary/20 text-primary">
+                            {CATEGORY_META[draftItem.category]?.label ?? draftItem.category}
                           </span>
-                        )}
+                        </div>
+                        <p className="truncate text-base font-bold text-foreground mt-0.5">
+                          {draftItem.product_name || "Artículo personalizado a medida"}
+                        </p>
                       </div>
-                      <p className="truncate text-base font-semibold text-foreground mt-0.5">
-                        {draftItem.product_name || "Artículo personalizado"}
-                      </p>
                     </div>
 
-                    <button
+                    <Button
                       type="button"
+                      variant="outline"
+                      size="sm"
+                      className="tap h-9 text-sm font-semibold rounded-xl shrink-0"
                       onClick={() => {
+                        setSelectedCatalogProduct(null);
                         setManualMode(false);
-                        setDraftItem(
-                          createEmptyDraft(
-                            draftItem.category,
-                            draftItem.cutter_modality || lastModality,
-                            draftItem.cutter_size_cm || lastSize,
-                          ),
-                        );
                       }}
-                      className="text-xs text-muted-foreground hover:text-destructive"
                     >
-                      Cambiar
-                    </button>
+                      Cambiar producto
+                    </Button>
                   </div>
 
-                  {/* Campos específicos según categoría */}
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {/* Modo Manual: campo de nombre si no tiene catálogo */}
-                    {!draftItem.product_id && (
-                      <>
-                        <div className="space-y-1 sm:col-span-2">
-                          <Label className="text-xs">Nombre del artículo *</Label>
-                          <Input
-                            className="tap h-9 text-sm"
-                            placeholder="Escribe el nombre del artículo..."
-                            value={draftItem.product_name}
-                            onChange={(e) =>
-                              setDraftItem((prev) => ({ ...prev, product_name: e.target.value }))
-                            }
-                            autoFocus
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">Categoría</Label>
-                          <Select
-                            value={draftItem.category}
-                            onValueChange={(v) => {
-                              const newCat = v as Category;
-                              const isCutter = newCat === "CORTADORES";
-                              const autoPrice = isCutter
-                                ? priceFor(
-                                    rules,
-                                    draftItem.cutter_modality ?? lastModality,
-                                    draftItem.cutter_size_cm ?? lastSize,
-                                  )
-                                : 0;
-                              setDraftPriceInput(String(autoPrice));
-                              setDraftItem((prev) => ({
-                                ...prev,
-                                category: newCat,
-                                cutter_modality: isCutter
-                                  ? prev.cutter_modality ?? lastModality
-                                  : null,
-                                cutter_size_cm: isCutter ? prev.cutter_size_cm ?? lastSize : null,
-                                unit_price: autoPrice,
-                                price_overridden: false,
-                              }));
-                            }}
-                          >
-                            <SelectTrigger className="tap h-9 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {CATEGORIES.map((c) => (
-                                <SelectItem key={c} value={c}>
-                                  {CATEGORY_META[c].label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </>
+                  {/* Configurador del Artículo */}
+                  <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 space-y-4">
+                    {manualMode && (
+                      <div className="space-y-1">
+                        <Label className="text-sm font-semibold">Nombre del producto *</Label>
+                        <Input
+                          className="tap h-12 text-base rounded-xl"
+                          placeholder="Ej. Cortador Letra 'M' con florecitas..."
+                          value={draftItem.product_name}
+                          onChange={(e) =>
+                            setDraftItem({ ...draftItem, product_name: e.target.value })
+                          }
+                        />
+                      </div>
                     )}
 
-                    {/* CORTADORES: Modalidad y Tamaño */}
+                    {/* Modalidad y Tamaño para Cortadores */}
                     {draftItem.category === "CORTADORES" && (
-                      <>
-                        <div className="space-y-1">
-                          <Label className="text-xs">Modalidad</Label>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <Label className="text-sm font-semibold text-foreground">Modalidad</Label>
                           <Select
                             value={draftItem.cutter_modality ?? "cutter_only"}
-                            onValueChange={(v) => {
-                              const newMod = v as Modality;
-                              const autoPrice = priceFor(
-                                rules,
-                                newMod,
-                                draftItem.cutter_size_cm ?? lastSize,
-                              );
-                              setDraftPriceInput(String(autoPrice));
-                              setDraftItem((prev) => ({
-                                ...prev,
-                                cutter_modality: newMod,
-                                unit_price: autoPrice,
-                                price_overridden: false,
-                              }));
+                            onValueChange={(v: Modality) => {
+                              setDraftItem({ ...draftItem, cutter_modality: v });
+                              setLastModality(v);
                             }}
                           >
-                            <SelectTrigger className="tap h-9 text-xs">
-                              <SelectValue />
+                            <SelectTrigger className="tap h-12 text-base rounded-xl bg-card border-border">
+                              <SelectValue placeholder="Modalidad" />
                             </SelectTrigger>
                             <SelectContent>
                               {MODALITIES.map((m) => (
-                                <SelectItem key={m.value} value={m.value}>
+                                <SelectItem key={m.value} value={m.value} className="text-base py-2.5">
                                   {m.label}
                                 </SelectItem>
                               ))}
@@ -996,639 +987,617 @@ function NuevoPedido() {
                           </Select>
                         </div>
 
-                        <div className="space-y-1">
-                          <Label className="text-xs">Tamaño</Label>
+                        <div className="space-y-1.5">
+                          <Label className="text-sm font-semibold text-foreground">Tamaño</Label>
                           <Select
                             value={String(draftItem.cutter_size_cm ?? 8)}
                             onValueChange={(v) => {
-                              const newSize = Number(v);
-                              const autoPrice = priceFor(
-                                rules,
-                                draftItem.cutter_modality ?? lastModality,
-                                newSize,
-                              );
-                              setDraftPriceInput(String(autoPrice));
-                              setDraftItem((prev) => ({
-                                ...prev,
-                                cutter_size_cm: newSize,
-                                unit_price: autoPrice,
-                                price_overridden: false,
-                              }));
+                              const s = Number(v);
+                              setDraftItem({ ...draftItem, cutter_size_cm: s });
+                              setLastSize(s);
                             }}
                           >
-                            <SelectTrigger className="tap h-9 text-xs">
-                              <SelectValue />
+                            <SelectTrigger className="tap h-12 text-base rounded-xl bg-card border-border">
+                              <SelectValue placeholder="Tamaño" />
                             </SelectTrigger>
                             <SelectContent>
                               {SIZES.map((s) => (
-                                <SelectItem key={s} value={String(s)}>
+                                <SelectItem key={s} value={String(s)} className="text-base py-2.5">
                                   {s} cm
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         </div>
-                      </>
-                    )}
-
-                    {/* STEPPER DE CANTIDAD [-] N [+] */}
-                    <div className="space-y-1">
-                      <Label className="text-xs">Cantidad</Label>
-                      <div className="flex items-center rounded-lg border border-border bg-background">
-                        <button
-                          type="button"
-                          className="flex h-9 w-9 items-center justify-center text-base font-bold text-muted-foreground hover:bg-secondary hover:text-foreground active:scale-95 transition-all rounded-l-lg"
-                          onClick={() =>
-                            setDraftItem((prev) => ({
-                              ...prev,
-                              quantity: Math.max(1, prev.quantity - 1),
-                            }))
-                          }
-                        >
-                          -
-                        </button>
-                        <input
-                          type="number"
-                          min={1}
-                          className="h-9 w-full border-0 bg-transparent text-center text-sm font-bold focus:outline-none"
-                          value={draftItem.quantity}
-                          onChange={(e) =>
-                            setDraftItem((prev) => ({
-                              ...prev,
-                              quantity: Math.max(1, parseInt(e.target.value, 10) || 1),
-                            }))
-                          }
-                        />
-                        <button
-                          type="button"
-                          className="flex h-9 w-9 items-center justify-center text-base font-bold text-muted-foreground hover:bg-secondary hover:text-foreground active:scale-95 transition-all rounded-r-lg"
-                          onClick={() =>
-                            setDraftItem((prev) => ({
-                              ...prev,
-                              quantity: prev.quantity + 1,
-                            }))
-                          }
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* PRECIO UNITARIO (si no es cortador o si tiene override) */}
-                    {draftItem.category !== "CORTADORES" && (
-                      <div className="space-y-1">
-                        <Label className="text-xs">Precio unitario ($)</Label>
-                        <Input
-                          className="tap h-9 text-sm"
-                          inputMode="decimal"
-                          placeholder="0.00"
-                          value={draftPriceInput}
-                          onChange={(e) => {
-                            const raw = e.target.value;
-                            setDraftPriceInput(raw);
-                            const parsed = parseFloat(raw.replace(",", ".")) || 0;
-                            setDraftItem((prev) => ({
-                              ...prev,
-                              price_overridden: true,
-                              unit_price: parsed,
-                            }));
-                          }}
-                        />
                       </div>
                     )}
-                  </div>
 
-                  {/* SECCIÓN DE DISEÑO PERSONALIZADO E IMÁGENES */}
-                  <CustomItemDesignSection
-                    isCustom={draftItem.is_custom}
-                    onIsCustomChange={(isCustom) =>
-                      setDraftItem((prev) => ({ ...prev, is_custom: isCustom }))
-                    }
-                    images={draftItem.custom_images}
-                    onImagesChange={(custom_images) =>
-                      setDraftItem((prev) => ({ ...prev, custom_images }))
-                    }
-                    customNotes={draftItem.notes}
-                    onCustomNotesChange={(notes) =>
-                      setDraftItem((prev) => ({ ...prev, notes }))
-                    }
-                  />
-
-                  {/* Resumen de precio de este producto y Botón AÑADIR */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-background/80 p-3 border border-border/80">
-                    <div className="flex items-center gap-4 text-xs">
-                      <div>
-                        <span className="text-muted-foreground">Unitario: </span>
-                        <span className="font-semibold text-foreground">
-                          {money(draftUnitPrice)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Subtotal: </span>
-                        <span className="font-display text-base text-primary">
-                          {money(draftSubtotal)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <Button
-                      type="button"
-                      onClick={addDraftToOrder}
-                      className="tap font-bold h-10 px-5 shadow-md shadow-primary/20 bg-primary text-primary-foreground hover:bg-primary/90"
-                    >
-                      <Plus className="mr-1.5 h-4 w-4 stroke-[3]" /> Añadir al pedido
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="py-6 text-center text-xs text-muted-foreground">
-                  <Sparkles className="mx-auto mb-2 h-6 w-6 text-primary/40 animate-pulse" />
-                  <p className="font-medium text-foreground">
-                    Selecciona un producto en la lista superior
-                  </p>
-                  <p className="mt-0.5">
-                    O haz clic en "Artículo manual" para registrar un producto no listado en el catálogo.
-                  </p>
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* 3. SECCIÓN PRODUCTOS AÑADIDOS (CONFIRMADOS - LISTA COMPACTA) */}
-          <section className="panel p-4 sm:p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h2 className="font-display text-lg">
-                  3. Productos añadidos ({items.length})
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  {totalUnits} unidades en total · Total artículos: {money(subtotal)}
-                </p>
-              </div>
-            </div>
-
-            {items.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
-                <ShoppingBag className="mx-auto mb-2 h-8 w-8 text-muted-foreground/30" />
-                <p className="font-medium">Todavía no has añadido productos al pedido.</p>
-                <p className="text-xs mt-1">
-                  Busca un producto arriba y presiona <strong>"Añadir al pedido"</strong>.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                {items.map((it) => {
-                  const price = computedPrice(it);
-                  const itemSubtotal = price * it.quantity;
-                  const prod = products.find((p) => p.id === it.product_id);
-
-                  // Prioridad de miniatura: personalizada principal > personalizada secundaria > catálogo
-                  const customPrimary =
-                    it.custom_images.find((img) => img.is_primary) ?? it.custom_images[0];
-                  const catalogImg =
-                    (prod?.product_images ?? []).find((i: any) => i.is_primary) ??
-                    prod?.product_images?.[0];
-
-                  return (
-                    <div
-                      key={it.key}
-                      className={cn(
-                        "group flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 transition-all",
-                        it.is_custom
-                          ? "border-amber-500/40 bg-amber-500/5 hover:border-amber-500/70 hover:bg-amber-500/10"
-                          : "border-border bg-card hover:border-border/80 hover:bg-secondary/40",
-                      )}
-                    >
-                      {/* Miniatura & Datos */}
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <button
-                          type="button"
-                          onClick={() => setViewerItem(it)}
-                          className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-secondary hover:ring-2 hover:ring-primary transition-all"
-                          title="Ver imagen / diseño ampliado"
-                        >
-                          {customPrimary?.previewUrl ? (
-                            <img
-                              src={customPrimary.previewUrl}
-                              alt=""
-                              className="h-full w-full object-contain p-0.5"
-                            />
-                          ) : customPrimary?.storage_path ? (
-                            <StoredImage
-                              image={customPrimary}
-                              alt=""
-                              className="h-full w-full object-contain p-0.5"
-                            />
-                          ) : catalogImg ? (
-                            <StoredImage
-                              image={catalogImg}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <Package className="h-5 w-5 text-muted-foreground/50" />
-                          )}
-
-                          {it.custom_images.length > 0 && (
-                            <span className="absolute bottom-0.5 right-0.5 rounded bg-black/80 px-1 text-[9px] font-bold text-white">
-                              📷 {it.custom_images.length}
-                            </span>
-                          )}
-                        </button>
-
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            {it.product_sku && (
-                              <span className="font-mono text-xs font-bold text-primary">
-                                {it.product_sku}
-                              </span>
-                            )}
-                            <span
-                              className="chip text-[10px] py-0 px-1.5"
-                              style={{
-                                color: `var(--${CATEGORY_META[it.category]?.token ?? "primary"})`,
-                                background: `color-mix(in oklab, var(--${CATEGORY_META[it.category]?.token ?? "primary"}) 16%, transparent)`,
-                              }}
-                            >
-                              {CATEGORY_META[it.category]?.label ?? it.category}
-                            </span>
-
-                            {it.is_custom && (
-                              <span className="chip text-[10px] py-0 px-1.5 bg-amber-500/20 text-amber-400 font-bold flex items-center gap-1">
-                                <Sparkles className="h-2.5 w-2.5" /> PERSONALIZADO
-                              </span>
-                            )}
-                          </div>
-
-                          <p className="truncate text-sm font-semibold text-foreground mt-0.5">
-                            {it.product_name}
-                          </p>
-
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                            {it.category === "CORTADORES" && it.cutter_size_cm && (
-                              <span>
-                                {it.cutter_size_cm} cm ·{" "}
-                                {MODALITIES.find((m) => m.value === it.cutter_modality)?.label ?? ""}
-                              </span>
-                            )}
-                            <span>
-                              <strong className="text-foreground font-bold">{it.quantity}</strong> ×{" "}
-                              {money(price)} ={" "}
-                              <strong className="text-foreground font-bold">
-                                {money(itemSubtotal)}
-                              </strong>
-                            </span>
-                          </div>
-
-                          {it.notes && (
-                            <p className="mt-1 text-xs text-amber-400/90 italic line-clamp-1">
-                              📝 {it.notes}
-                            </p>
-                          )}
+                    {/* Cantidad y Precios */}
+                    <div className="grid gap-3 sm:grid-cols-2 items-center pt-1">
+                      <div className="space-y-1.5">
+                        <Label className="text-sm font-semibold text-foreground">Cantidad</Label>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="tap h-12 w-12 rounded-xl shrink-0 font-bold"
+                            disabled={draftItem.quantity <= 1}
+                            onClick={() =>
+                              setDraftItem({
+                                ...draftItem,
+                                quantity: Math.max(1, draftItem.quantity - 1),
+                              })
+                            }
+                          >
+                            <Minus className="h-5 w-5" />
+                          </Button>
+                          <Input
+                            type="number"
+                            inputMode="numeric"
+                            className="tap h-12 text-center text-lg font-bold rounded-xl"
+                            value={draftItem.quantity}
+                            onChange={(e) =>
+                              setDraftItem({
+                                ...draftItem,
+                                quantity: Math.max(1, parseInt(e.target.value) || 1),
+                              })
+                            }
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="tap h-12 w-12 rounded-xl shrink-0 font-bold"
+                            onClick={() =>
+                              setDraftItem({
+                                ...draftItem,
+                                quantity: draftItem.quantity + 1,
+                              })
+                            }
+                          >
+                            <Plus className="h-5 w-5" />
+                          </Button>
                         </div>
                       </div>
 
-                      {/* Botones de acción rápida */}
-                      <div className="flex items-center gap-1.5">
-                        {/* Botón Ver diseño */}
-                        {(it.custom_images.length > 0 || it.is_custom || catalogImg) && (
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            className="tap h-8 px-2.5 text-xs font-semibold"
-                            onClick={() => setViewerItem(it)}
-                          >
-                            <Eye className="mr-1 h-3.5 w-3.5 text-primary" />
-                            Ver diseño
-                          </Button>
-                        )}
-
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="tap h-8 w-8 text-muted-foreground hover:bg-secondary hover:text-foreground"
-                          onClick={() => duplicateItem(it.key)}
-                          title="Duplicar artículo"
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="tap h-8 w-8 text-muted-foreground hover:bg-secondary hover:text-foreground"
-                          onClick={() => startEditItem(it)}
-                          title="Editar artículo"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="tap h-8 w-8 text-destructive hover:bg-destructive/10"
-                          onClick={() => removeItem(it.key)}
-                          title="Eliminar artículo"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                      {/* Resumen de Precios */}
+                      <div className="rounded-2xl border border-border bg-secondary/30 p-3.5 text-right space-y-1">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Precio unitario:</span>
+                          <span className="font-semibold text-foreground">
+                            {money(currentDraftUnitPrice)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-base font-bold">
+                          <span className="text-foreground">Subtotal ({draftItem.quantity} pzas):</span>
+                          <span className="text-primary font-display text-xl">
+                            {money(currentDraftSubtotal)}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
 
-          {/* 4. SECCIÓN ENTREGA */}
-          <section className="panel p-4 sm:p-5 space-y-4">
-            <h2 className="font-display text-lg">4. Entrega</h2>
+                    {/* SECCIÓN DISEÑO PERSONALIZADO (Carga de Imágenes) */}
+                    <CustomItemDesignSection
+                      isCustom={draftItem.is_custom}
+                      onIsCustomChange={(val) => setDraftItem({ ...draftItem, is_custom: val })}
+                      images={draftItem.custom_images}
+                      onImagesChange={(imgs) => setDraftItem({ ...draftItem, custom_images: imgs })}
+                      customNotes={draftItem.notes}
+                      onCustomNotesChange={(notes) => setDraftItem({ ...draftItem, notes })}
+                      showToggle={true}
+                    />
 
-            <div className="flex gap-2">
-              {(["envio", "entrega_personal"] as DeliveryType[]).map((d) => (
-                <button
-                  key={d}
+                    {/* BOTÓN GIGANTE A TODO EL ANCHO: + AÑADIR AL PEDIDO */}
+                    <Button
+                      type="button"
+                      size="lg"
+                      className="tap w-full h-14 rounded-2xl bg-primary text-primary-foreground font-display text-lg font-bold shadow-lg hover:bg-primary/90 transition-all mt-2"
+                      onClick={addDraftToOrder}
+                    >
+                      <Plus className="mr-2 h-6 w-6 stroke-[3]" /> + AÑADIR AL PEDIDO
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* 3. SECCIÓN ENTREGA & PAGO (COLAPSABLE EN ESCRITORIO / DESPLEGABLE) */}
+            <section className="panel p-4 sm:p-5 space-y-4">
+              <h2 className="font-display text-lg font-bold flex items-center gap-2">
+                <Truck className="h-5 w-5 text-primary" />
+                <span>3. Entrega & Observaciones</span>
+              </h2>
+
+              <div className="flex gap-2">
+                <Button
                   type="button"
-                  onClick={() => setDeliveryType(d)}
+                  variant={deliveryType === "envio" ? "default" : "outline"}
                   className={cn(
-                    "chip flex-1 border border-border text-xs py-2 transition-all font-semibold",
-                    deliveryType === d
-                      ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                      : "text-muted-foreground hover:bg-secondary",
+                    "tap flex-1 h-12 text-base font-semibold rounded-xl",
+                    deliveryType === "envio" && "bg-primary text-primary-foreground font-bold",
                   )}
+                  onClick={() => setDeliveryType("envio")}
                 >
-                  {d === "envio" ? "📦 Envío por paquetería" : "🤝 Entrega personal"}
-                </button>
-              ))}
-            </div>
+                  <Truck className="mr-2 h-5 w-5" /> Envío a domicilio
+                </Button>
+                <Button
+                  type="button"
+                  variant={deliveryType === "entrega_personal" ? "default" : "outline"}
+                  className={cn(
+                    "tap flex-1 h-12 text-base font-semibold rounded-xl",
+                    deliveryType === "entrega_personal" && "bg-primary text-primary-foreground font-bold",
+                  )}
+                  onClick={() => setDeliveryType("entrega_personal")}
+                >
+                  <MapPin className="mr-2 h-5 w-5" /> Entrega personal
+                </Button>
+              </div>
 
-            {deliveryType === "envio" ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {(
-                  [
-                    ["first_name", "Nombre de quien recibe"],
-                    ["last_name", "Apellido"],
-                    ["phone", "Teléfono"],
-                    ["street", "Calle"],
-                    ["ext_number", "Número exterior"],
-                    ["int_number", "Número interior"],
-                    ["neighborhood", "Colonia"],
-                    ["postal_code", "Código postal"],
-                    ["city", "Ciudad"],
-                    ["municipality", "Municipio"],
-                    ["state", "Estado"],
-                    ["carrier", "Paquetería"],
-                    ["shipping_cost", "Costo de envío"],
-                  ] as const
-                ).map(([k, label]) => (
-                  <div key={k} className="space-y-1.5">
-                    <Label className="text-xs">{label}</Label>
+              {deliveryType === "envio" ? (
+                <div className="grid gap-3 sm:grid-cols-2 pt-2">
+                  <div className="space-y-1 sm:col-span-2">
+                    <Label className="text-sm font-semibold">Calle y número</Label>
                     <Input
-                      className="tap h-9 text-sm"
-                      value={shipping[k]}
-                      onChange={(e) => setShipping({ ...shipping, [k]: e.target.value })}
+                      className="tap h-11 text-base rounded-xl"
+                      placeholder="Calle, número exterior e interior"
+                      value={shipping.street}
+                      onChange={(e) => setShipping({ ...shipping, street: e.target.value })}
                     />
                   </div>
-                ))}
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label className="text-xs">Referencias de entrega</Label>
-                  <Textarea
-                    rows={2}
-                    className="text-sm"
-                    value={shipping.references_text}
-                    onChange={(e) => setShipping({ ...shipping, references_text: e.target.value })}
-                  />
+                  <div className="space-y-1">
+                    <Label className="text-sm font-semibold">Colonia / Fraccionamiento</Label>
+                    <Input
+                      className="tap h-11 text-base rounded-xl"
+                      placeholder="Colonia"
+                      value={shipping.neighborhood}
+                      onChange={(e) => setShipping({ ...shipping, neighborhood: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-sm font-semibold">Ciudad / Municipio</Label>
+                    <Input
+                      className="tap h-11 text-base rounded-xl"
+                      placeholder="Ciudad"
+                      value={shipping.city}
+                      onChange={(e) => setShipping({ ...shipping, city: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-sm font-semibold">Costo de envío ($)</Label>
+                    <Input
+                      className="tap h-11 text-base rounded-xl"
+                      type="number"
+                      placeholder="0.00"
+                      value={shipping.shipping_cost}
+                      onChange={(e) => setShipping({ ...shipping, shipping_cost: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-sm font-semibold">Paquetería</Label>
+                    <Input
+                      className="tap h-11 text-base rounded-xl"
+                      placeholder="Ej. Estafeta, FedEx, Motoenvío"
+                      value={shipping.carrier}
+                      onChange={(e) => setShipping({ ...shipping, carrier: e.target.value })}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label className="text-xs">Instrucciones especiales</Label>
-                  <Textarea
-                    rows={2}
-                    className="text-sm"
-                    value={shipping.special_instructions}
-                    onChange={(e) =>
-                      setShipping({ ...shipping, special_instructions: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Nombre de quien recibe</Label>
-                  <Input
-                    className="tap h-9 text-sm"
-                    value={delivery.first_name}
-                    onChange={(e) => setDelivery({ ...delivery, first_name: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Apellido</Label>
-                  <Input
-                    className="tap h-9 text-sm"
-                    value={delivery.last_name}
-                    onChange={(e) => setDelivery({ ...delivery, last_name: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Teléfono</Label>
-                  <Input
-                    className="tap h-9 text-sm"
-                    value={delivery.phone}
-                    onChange={(e) => setDelivery({ ...delivery, phone: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Lugar / Punto de entrega</Label>
-                  <Input
-                    className="tap h-9 text-sm"
-                    value={delivery.place}
-                    onChange={(e) => setDelivery({ ...delivery, place: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Fecha</Label>
-                  <Input
-                    className="tap h-9 text-sm"
-                    type="date"
-                    value={delivery.delivery_date}
-                    onChange={(e) => setDelivery({ ...delivery, delivery_date: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Hora</Label>
-                  <Input
-                    className="tap h-9 text-sm"
-                    type="time"
-                    value={delivery.delivery_time}
-                    onChange={(e) => setDelivery({ ...delivery, delivery_time: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label className="text-xs">Instrucciones</Label>
-                  <Textarea
-                    rows={2}
-                    className="text-sm"
-                    value={delivery.instructions}
-                    onChange={(e) => setDelivery({ ...delivery, instructions: e.target.value })}
-                  />
-                </div>
-              </div>
-            )}
-          </section>
-        </div>
-
-        {/* COLUMNA LATERAL (Sticky en computadora) */}
-        <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
-          {/* Parámetros del pedido */}
-          <section className="panel p-4 space-y-3">
-            <h2 className="font-display text-lg">Detalles del pedido</h2>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">Prioridad</Label>
-              <Select value={priority} onValueChange={(v) => setPriority(v as Priority)}>
-                <SelectTrigger className="tap h-9 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PRIORITIES.map((p) => (
-                    <SelectItem key={p.value} value={p.value}>
-                      {p.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">Fecha límite de entrega</Label>
-              <Input
-                className="tap h-9 text-xs"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">Responsable del pedido</Label>
-              <Select
-                value={assignee || "none"}
-                onValueChange={(v) => setAssignee(v === "none" ? "" : v)}
-              >
-                <SelectTrigger className="tap h-9 text-xs">
-                  <SelectValue placeholder="Sin asignar" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin asignar</SelectItem>
-                  {(profiles ?? []).map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.full_name ?? p.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">Descuento ($)</Label>
-              <Input
-                className="tap h-9 text-xs"
-                inputMode="decimal"
-                value={discount}
-                onChange={(e) => setDiscount(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">Nota interna del pedido</Label>
-              <Textarea
-                rows={2}
-                className="text-xs"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-              />
-            </div>
-          </section>
-
-          {/* Resumen y Guardar */}
-          <section className="panel p-4 space-y-3">
-            <h2 className="font-display text-lg">Resumen final</h2>
-            <div className="space-y-1.5 text-xs">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal artículos:</span>
-                <span className="font-semibold">{money(subtotal)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Envío:</span>
-                <span className="font-semibold">{money(shippingCost)}</span>
-              </div>
-              {discountNum > 0 && (
-                <div className="flex justify-between text-amber-400">
-                  <span>Descuento:</span>
-                  <span className="font-semibold">-{money(discountNum)}</span>
-                </div>
-              )}
-              <div className="border-t border-border pt-2 flex justify-between text-base font-bold">
-                <span>Total:</span>
-                <span className="font-display text-xl text-primary">{money(total)}</span>
-              </div>
-            </div>
-
-            <Button
-              className="tap w-full font-bold h-11 bg-primary text-primary-foreground shadow-md shadow-primary/20 hover:bg-primary/90"
-              disabled={saving || items.length === 0}
-              onClick={save}
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando pedido…
-                </>
               ) : (
-                "Guardar pedido"
+                <div className="grid gap-3 sm:grid-cols-2 pt-2">
+                  <div className="space-y-1 sm:col-span-2">
+                    <Label className="text-sm font-semibold">Lugar o punto de entrega *</Label>
+                    <Input
+                      className="tap h-11 text-base rounded-xl"
+                      placeholder="Ej. Taller Cookies Moon, Parque Central..."
+                      value={delivery.place}
+                      onChange={(e) => setDelivery({ ...delivery, place: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-sm font-semibold">Fecha de entrega</Label>
+                    <Input
+                      className="tap h-11 text-base rounded-xl"
+                      type="date"
+                      value={delivery.delivery_date}
+                      onChange={(e) => setDelivery({ ...delivery, delivery_date: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-sm font-semibold">Hora aproximada</Label>
+                    <Input
+                      className="tap h-11 text-base rounded-xl"
+                      placeholder="Ej. 4:30 PM"
+                      value={delivery.delivery_time}
+                      onChange={(e) => setDelivery({ ...delivery, delivery_time: e.target.value })}
+                    />
+                  </div>
+                </div>
               )}
-            </Button>
-          </section>
-        </aside>
+
+              {/* Notas generales */}
+              <div className="space-y-1 pt-2">
+                <Label className="text-sm font-semibold">Notas u observaciones del pedido</Label>
+                <Textarea
+                  className="tap min-h-[72px] text-base rounded-xl"
+                  placeholder="Observaciones generales para el pedido..."
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                />
+              </div>
+            </section>
+          </div>
+
+          {/* ========================================== */}
+          {/* COLUMNA LATERAL (RESUMEN EN DESKTOP) */}
+          {/* ========================================== */}
+          <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+            <section className="panel p-4 sm:p-5 space-y-4">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <h2 className="font-display text-lg font-bold flex items-center gap-2">
+                  <ShoppingBag className="h-5 w-5 text-primary" />
+                  <span>Productos añadidos ({items.length})</span>
+                </h2>
+              </div>
+
+              {/* Lista de productos agregados */}
+              {items.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+                  <ShoppingBag className="mx-auto mb-2 h-8 w-8 text-muted-foreground/30" />
+                  <p className="font-semibold text-foreground">Aún no hay productos añadidos</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Selecciona un producto arriba y pulsa "+ Añadir al pedido".
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+                  {items.map((it) => {
+                    const primaryCustom = it.custom_images.find((i) => i.is_primary) ?? it.custom_images[0];
+                    const thumbUrl = primaryCustom?.previewUrl;
+
+                    return (
+                      <div
+                        key={it.key}
+                        className={cn(
+                          "rounded-2xl border p-3 bg-card shadow-sm transition-all space-y-2",
+                          it.is_custom && "border-amber-500/40 bg-amber-500/5",
+                        )}
+                      >
+                        <div className="flex gap-3">
+                          {/* Miniatura prioritaria */}
+                          <span className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-secondary">
+                            {thumbUrl ? (
+                              <img
+                                src={thumbUrl}
+                                alt={it.product_name}
+                                className="h-full w-full object-contain p-1"
+                              />
+                            ) : it.image_preview ? (
+                              <StoredImage
+                                image={it.image_preview}
+                                alt={it.product_name}
+                                className="h-full w-full object-contain p-1"
+                              />
+                            ) : (
+                              <Package className="h-6 w-6 text-muted-foreground opacity-40" />
+                            )}
+                            {it.custom_images.length > 0 && (
+                              <span className="absolute bottom-1 right-1 rounded bg-black/85 px-1 text-[9px] font-bold text-white shadow-sm">
+                                📷 {it.custom_images.length}
+                              </span>
+                            )}
+                          </span>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              {it.product_sku && (
+                                <span className="font-mono text-xs font-bold text-primary">
+                                  {it.product_sku}
+                                </span>
+                              )}
+                              {it.is_custom && (
+                                <span className="chip text-[10px] py-0 px-1.5 bg-amber-500/20 text-amber-400 font-bold flex items-center gap-1">
+                                  <Sparkles className="h-3 w-3" /> PERSONALIZADO
+                                </span>
+                              )}
+                            </div>
+                            <p className="truncate font-bold text-base text-foreground mt-0.5">
+                              {it.product_name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {it.category === "CORTADORES" && it.cutter_size_cm
+                                ? `${it.cutter_size_cm} cm · ${
+                                    MODALITIES.find((m) => m.value === it.cutter_modality)?.label ?? ""
+                                  } · `
+                                : ""}
+                              <span className="font-bold text-foreground">{it.quantity}</span> × {money(computedPrice(it))} ={" "}
+                              <span className="font-bold text-primary">{money(computedPrice(it) * it.quantity)}</span>
+                            </p>
+                            {it.notes && (
+                              <p className="text-xs text-amber-400/90 italic truncate mt-0.5">
+                                📝 {it.notes}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Botones de acción táctiles en la tarjeta */}
+                        <div className="flex items-center justify-between border-t border-border/60 pt-2 text-xs">
+                          {/* Botón Ver diseño si tiene imágenes */}
+                          {(it.custom_images.length > 0 || it.image_preview) && (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              className="tap h-8 px-2.5 text-xs font-bold bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 border border-amber-500/30"
+                              onClick={() =>
+                                setViewerItem({
+                                  title: it.product_name,
+                                  productSku: it.product_sku,
+                                  isCustom: it.is_custom,
+                                  customNotes: it.notes,
+                                  customImages: it.custom_images.map((img) => ({
+                                    id: img.id,
+                                    previewUrl: img.previewUrl,
+                                    storage_path: img.storage_path,
+                                    is_primary: img.is_primary,
+                                  })),
+                                  catalogImages: it.image_preview ? [it.image_preview] : [],
+                                })
+                              }
+                            >
+                              <Eye className="mr-1.5 h-3.5 w-3.5" /> Ver diseño
+                              {it.custom_images.length > 0 && (
+                                <span className="ml-1 text-[10px]">({it.custom_images.length})</span>
+                              )}
+                            </Button>
+                          )}
+
+                          <div className="flex items-center gap-1 ml-auto">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="tap h-8 text-xs font-semibold"
+                              onClick={() => openEditModal(it)}
+                            >
+                              <Pencil className="mr-1 h-3.5 w-3.5" /> Editar
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="tap h-8 w-8 text-muted-foreground"
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-40">
+                                <DropdownMenuItem onClick={() => duplicateItem(it)} className="text-sm">
+                                  <Copy className="mr-2 h-4 w-4" /> Duplicar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => removeItem(it.key)}
+                                  className="text-sm text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Totales y Desglose */}
+              <div className="space-y-2 border-t border-border pt-3 text-sm">
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Subtotal artículos:</span>
+                  <span className="font-semibold text-foreground">{money(subtotal)}</span>
+                </div>
+                {discountNum > 0 && (
+                  <div className="flex justify-between text-emerald-500">
+                    <span>Descuento:</span>
+                    <span className="font-semibold">-{money(discountNum)}</span>
+                  </div>
+                )}
+                {shippingCost > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Envío:</span>
+                    <span className="font-semibold text-foreground">{money(shippingCost)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-border pt-2 text-base font-bold">
+                  <span className="text-foreground">Total del pedido:</span>
+                  <span className="text-primary font-display text-2xl">{money(total)}</span>
+                </div>
+              </div>
+
+              {/* Botón de Guardar en Desktop */}
+              <Button
+                type="button"
+                size="lg"
+                className="tap w-full h-14 text-base font-bold bg-primary text-primary-foreground rounded-2xl shadow-lg hover:bg-primary/90 hidden lg:flex"
+                disabled={saving || items.length === 0}
+                onClick={save}
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Guardando pedido...
+                  </>
+                ) : (
+                  <>
+                    <Check className="mr-2 h-5 w-5 stroke-[3]" /> Guardar pedido ({items.length} pzas)
+                  </>
+                )}
+              </Button>
+            </section>
+          </aside>
+        </div>
       </div>
 
-      {/* DIÁLOGO MODAL PARA EDITAR ARTÍCULO AÑADIDO */}
-      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+      {/* ========================================== */}
+      {/* BARRA INFERIOR FLOTANTE STICKY (MÓVIL & TABLET) */}
+      {/* ========================================== */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-border p-3 px-4 shadow-2xl pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground">
+            {items.length} producto{items.length === 1 ? "" : "s"}
+          </p>
+          <p className="font-display text-xl font-bold text-primary leading-tight">
+            {money(total)}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="tap h-12 px-3.5 text-sm font-semibold rounded-xl border-border bg-secondary/50"
+            onClick={() => setIsMobileSummaryOpen(true)}
+          >
+            <ShoppingBag className="mr-1.5 h-4 w-4 text-primary" /> Resumen
+          </Button>
+
+          <Button
+            type="button"
+            size="lg"
+            className="tap h-12 px-5 text-sm font-bold bg-primary text-primary-foreground rounded-xl shadow-md hover:bg-primary/90"
+            disabled={saving || items.length === 0}
+            onClick={save}
+          >
+            {saving ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <>Guardar</>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {/* ========================================== */}
+      {/* BOTTOM SHEET DE RESUMEN EN MÓVIL */}
+      {/* ========================================== */}
+      <Sheet open={isMobileSummaryOpen} onOpenChange={setIsMobileSummaryOpen}>
+        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-3xl p-5 space-y-4">
+          <SheetHeader className="text-left border-b border-border pb-3">
+            <SheetTitle className="font-display text-xl font-bold flex items-center justify-between">
+              <span>Resumen del Pedido</span>
+              <span className="text-primary">{money(total)}</span>
+            </SheetTitle>
+          </SheetHeader>
+
+          {/* Desglose de Totales */}
+          <div className="space-y-2 rounded-2xl bg-secondary/30 p-4 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Subtotal ({items.length} productos):</span>
+              <span className="font-semibold text-foreground">{money(subtotal)}</span>
+            </div>
+            {discountNum > 0 && (
+              <div className="flex justify-between text-emerald-500">
+                <span>Descuento:</span>
+                <span className="font-semibold">-{money(discountNum)}</span>
+              </div>
+            )}
+            {shippingCost > 0 && (
+              <div className="flex justify-between text-muted-foreground">
+                <span>Envío:</span>
+                <span className="font-semibold text-foreground">{money(shippingCost)}</span>
+              </div>
+            )}
+            <div className="flex justify-between border-t border-border pt-2 text-base font-bold">
+              <span>Total final:</span>
+              <span className="text-primary font-display text-2xl">{money(total)}</span>
+            </div>
+          </div>
+
+          {/* Lista rápida de artículos en el resumen móvil */}
+          <div className="space-y-2">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Artículos añadidos:
+            </p>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {items.map((it) => (
+                <div
+                  key={it.key}
+                  className="flex items-center justify-between p-3 rounded-xl border border-border bg-card text-sm"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-foreground truncate">{it.product_name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {it.quantity} pzas × {money(computedPrice(it))}
+                    </p>
+                  </div>
+                  <span className="font-bold text-primary ml-2">
+                    {money(computedPrice(it) * it.quantity)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <SheetFooter className="pt-2">
+            <Button
+              type="button"
+              size="lg"
+              className="tap w-full h-14 text-base font-bold bg-primary text-primary-foreground rounded-2xl shadow-lg"
+              disabled={saving || items.length === 0}
+              onClick={() => {
+                setIsMobileSummaryOpen(false);
+                save();
+              }}
+            >
+              {saving ? (
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              ) : (
+                <Check className="mr-2 h-5 w-5 stroke-[3]" />
+              )}
+              Confirmar y Guardar Pedido ({money(total)})
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      {/* ========================================== */}
+      {/* MODAL DE EDICIÓN DE ARTÍCULO YA AÑADIDO */}
+      {/* ========================================== */}
+      <Dialog open={!!editingItem} onOpenChange={(open) => !open && setEditingItem(null)}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto p-4 sm:p-6 rounded-3xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 font-display text-lg">
-              <Pencil className="h-4 w-4 text-primary" /> Editar artículo del pedido
+            <DialogTitle className="font-display text-lg font-bold">
+              Editar artículo: {editingItem?.product_name}
             </DialogTitle>
           </DialogHeader>
 
           {editingItem && (
             <div className="space-y-4 py-2">
-              <div className="rounded-lg bg-secondary p-2.5">
-                <p className="text-xs font-mono font-bold text-primary">{editingItem.product_sku}</p>
-                <p className="text-sm font-semibold">{editingItem.product_name}</p>
+              <div className="space-y-1">
+                <Label className="text-sm font-semibold">Nombre del producto</Label>
+                <Input
+                  className="tap h-11 text-base rounded-xl"
+                  value={editingItem.product_name}
+                  onChange={(e) =>
+                    setEditingItem({ ...editingItem, product_name: e.target.value })
+                  }
+                />
               </div>
 
-              {/* Si es cortador: Modalidad y Tamaño */}
               {editingItem.category === "CORTADORES" && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Modalidad</Label>
+                    <Label className="text-sm font-semibold">Modalidad</Label>
                     <Select
                       value={editingItem.cutter_modality ?? "cutter_only"}
-                      onValueChange={(v) => {
-                        const newMod = v as Modality;
-                        const autoPrice = priceFor(rules, newMod, editingItem.cutter_size_cm);
-                        setEditingPriceInput(String(autoPrice));
-                        setEditingItem({
-                          ...editingItem,
-                          cutter_modality: newMod,
-                          unit_price: autoPrice,
-                          price_overridden: false,
-                        });
-                      }}
+                      onValueChange={(v: Modality) =>
+                        setEditingItem({ ...editingItem, cutter_modality: v })
+                      }
                     >
-                      <SelectTrigger className="tap text-xs">
+                      <SelectTrigger className="tap h-11 text-base rounded-xl">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1642,22 +1611,14 @@ function NuevoPedido() {
                   </div>
 
                   <div className="space-y-1">
-                    <Label className="text-xs">Tamaño</Label>
+                    <Label className="text-sm font-semibold">Tamaño</Label>
                     <Select
                       value={String(editingItem.cutter_size_cm ?? 8)}
-                      onValueChange={(v) => {
-                        const newSize = Number(v);
-                        const autoPrice = priceFor(rules, editingItem.cutter_modality, newSize);
-                        setEditingPriceInput(String(autoPrice));
-                        setEditingItem({
-                          ...editingItem,
-                          cutter_size_cm: newSize,
-                          unit_price: autoPrice,
-                          price_overridden: false,
-                        });
-                      }}
+                      onValueChange={(v) =>
+                        setEditingItem({ ...editingItem, cutter_size_cm: Number(v) })
+                      }
                     >
-                      <SelectTrigger className="tap text-xs">
+                      <SelectTrigger className="tap h-11 text-base rounded-xl">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1672,92 +1633,50 @@ function NuevoPedido() {
                 </div>
               )}
 
-              {/* Stepper Cantidad */}
-              <div className="space-y-1">
-                <Label className="text-xs">Cantidad</Label>
-                <div className="flex items-center rounded-lg border border-border bg-background">
-                  <button
-                    type="button"
-                    className="flex h-9 w-9 items-center justify-center text-base font-bold text-muted-foreground hover:bg-secondary rounded-l-lg"
-                    onClick={() =>
-                      setEditingItem({
-                        ...editingItem,
-                        quantity: Math.max(1, editingItem.quantity - 1),
-                      })
-                    }
-                  >
-                    -
-                  </button>
-                  <input
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label className="text-sm font-semibold">Cantidad</Label>
+                  <Input
+                    className="tap h-11 text-base rounded-xl"
                     type="number"
-                    min={1}
-                    className="h-9 w-full border-0 bg-transparent text-center text-sm font-bold focus:outline-none"
                     value={editingItem.quantity}
                     onChange={(e) =>
                       setEditingItem({
                         ...editingItem,
-                        quantity: Math.max(1, parseInt(e.target.value, 10) || 1),
+                        quantity: Math.max(1, parseInt(e.target.value) || 1),
                       })
                     }
                   />
-                  <button
-                    type="button"
-                    className="flex h-9 w-9 items-center justify-center text-base font-bold text-muted-foreground hover:bg-secondary rounded-r-lg"
-                    onClick={() =>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-sm font-semibold">Precio unitario ($)</Label>
+                  <Input
+                    className="tap h-11 text-base rounded-xl"
+                    type="number"
+                    value={editingPriceInput}
+                    onChange={(e) => {
+                      setEditingPriceInput(e.target.value);
                       setEditingItem({
                         ...editingItem,
-                        quantity: editingItem.quantity + 1,
-                      })
-                    }
-                  >
-                    +
-                  </button>
+                        price_overridden: true,
+                        price_override_reason: "Precio modificado manualmente",
+                      });
+                    }}
+                  />
                 </div>
               </div>
 
-              {/* Precio unitario */}
-              <div className="space-y-1">
-                <Label className="text-xs">Precio unitario ($)</Label>
-                <Input
-                  className="tap text-sm"
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  value={editingPriceInput}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    setEditingPriceInput(raw);
-                    const parsed = parseFloat(raw.replace(",", ".")) || 0;
-                    setEditingItem({
-                      ...editingItem,
-                      price_overridden: true,
-                      unit_price: parsed,
-                    });
-                  }}
-                />
-              </div>
-
-              {/* Gestión de diseño personalizado dentro del modal de edición */}
+              {/* Imágenes y Notas en Edición */}
               <CustomItemDesignSection
                 isCustom={editingItem.is_custom}
-                onIsCustomChange={(isCustom) =>
-                  setEditingItem({ ...editingItem, is_custom: isCustom })
-                }
+                onIsCustomChange={(val) => setEditingItem({ ...editingItem, is_custom: val })}
                 images={editingItem.custom_images}
-                onImagesChange={(custom_images) =>
-                  setEditingItem({ ...editingItem, custom_images })
-                }
+                onImagesChange={(imgs) => setEditingItem({ ...editingItem, custom_images: imgs })}
                 customNotes={editingItem.notes}
-                onCustomNotesChange={(notes) =>
-                  setEditingItem({ ...editingItem, notes })
-                }
+                onCustomNotesChange={(notes) => setEditingItem({ ...editingItem, notes })}
+                showToggle={true}
               />
-
-              <div className="rounded-lg bg-secondary/50 p-2.5 text-right text-xs">
-                <span className="text-muted-foreground">Nuevo subtotal: </span>
-                <span className="font-display text-base font-bold text-primary">
-                  {money(computedPrice(editingItem) * editingItem.quantity)}
-                </span>
-              </div>
             </div>
           )}
 
@@ -1765,92 +1684,92 @@ function NuevoPedido() {
             <Button
               type="button"
               variant="outline"
-              className="tap"
-              onClick={() => setIsEditOpen(false)}
+              className="tap h-11 text-sm font-semibold rounded-xl"
+              onClick={() => setEditingItem(null)}
             >
               Cancelar
             </Button>
-            <Button type="button" className="tap font-bold" onClick={saveEditedItem}>
+            <Button
+              type="button"
+              className="tap h-11 text-sm font-bold bg-primary text-primary-foreground rounded-xl"
+              onClick={saveEditedItem}
+            >
               Guardar cambios
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* MODAL 1-TAP PARA VER DISEÑO / IMÁGENES */}
+      {/* ========================================== */}
+      {/* VISOR DE DISEÑO EN 1 TOQUE */}
+      {/* ========================================== */}
       <CustomDesignViewerModal
         open={!!viewerItem}
         onOpenChange={(open) => !open && setViewerItem(null)}
-        title={viewerItem?.product_name ?? "Artículo"}
-        productSku={viewerItem?.product_sku}
-        isCustom={viewerItem?.is_custom}
-        customNotes={viewerItem?.notes}
-        customImages={viewerItem?.custom_images ?? []}
-        catalogImages={
-          viewerItem?.product_id
-            ? products.find((p) => p.id === viewerItem.product_id)?.product_images ?? []
-            : []
-        }
+        title={viewerItem?.title ?? "Artículo"}
+        productSku={viewerItem?.productSku}
+        isCustom={viewerItem?.isCustom}
+        customNotes={viewerItem?.customNotes}
+        customImages={viewerItem?.customImages ?? []}
+        catalogImages={viewerItem?.catalogImages ?? []}
       />
 
-      {/* DIÁLOGO DE ÉXITO POSTERIOR AL GUARDADO CON ACCIÓN DE RESUMEN */}
-      <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
-        <DialogContent className="sm:max-w-md text-center p-6 space-y-4">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-500 shadow-inner">
-            <Check className="h-8 w-8 stroke-[3]" />
-          </div>
-
-          <div className="space-y-1">
-            <DialogTitle className="font-display text-2xl font-bold text-foreground">
-              ¡Pedido creado correctamente!
+      {/* ========================================== */}
+      {/* DIÁLOGO DE ERROR DE GUARDADO CON REINTENTO */}
+      {/* ========================================== */}
+      <Dialog
+        open={saveErrorDialog.open}
+        onOpenChange={(open) => !open && setSaveErrorDialog({ ...saveErrorDialog, open: false })}
+      >
+        <DialogContent className="max-w-md rounded-3xl p-6 border-destructive/30">
+          <DialogHeader>
+            <DialogTitle className="font-display text-lg font-bold text-destructive flex items-center gap-2">
+              <AlertCircle className="h-6 w-6" /> No se pudo guardar el pedido
             </DialogTitle>
-            <p className="text-base font-mono font-bold text-primary">
-              {createdOrderSummary?.folio}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {createdOrderSummary?.customer_name} · Total: {money(createdOrderSummary?.total ?? 0)}
-            </p>
-          </div>
+          </DialogHeader>
 
-          <div className="grid gap-2 pt-2">
+          <p className="text-sm text-foreground leading-relaxed py-2">
+            {saveErrorDialog.message}
+          </p>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
             <Button
-              className="tap font-bold h-11 bg-primary text-primary-foreground shadow-md shadow-primary/20 hover:bg-primary/90"
-              onClick={() => setShowSummaryModal(true)}
+              type="button"
+              variant="outline"
+              className="tap h-11 text-sm font-semibold rounded-xl"
+              onClick={() => setSaveErrorDialog({ ...saveErrorDialog, open: false })}
             >
-              <Download className="mr-2 h-4 w-4 stroke-[2.5]" /> Descargar resumen para clienta
+              Revisar datos
             </Button>
-
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                variant="outline"
-                className="tap font-semibold"
-                onClick={() => {
-                  if (createdOrderId) {
-                    navigate({ to: "/pedidos/$orderId", params: { orderId: createdOrderId } });
-                  }
-                }}
-              >
-                <Eye className="mr-1.5 h-4 w-4" /> Ver pedido
-              </Button>
-
-              <Button
-                variant="secondary"
-                className="tap font-semibold"
-                onClick={resetForm}
-              >
-                <RotateCcw className="mr-1.5 h-4 w-4" /> Nuevo pedido
-              </Button>
-            </div>
-          </div>
+            <Button
+              type="button"
+              className="tap h-11 text-sm font-bold bg-primary text-primary-foreground rounded-xl"
+              onClick={() => {
+                setSaveErrorDialog({ ...saveErrorDialog, open: false });
+                save();
+              }}
+            >
+              <RotateCcw className="mr-1.5 h-4 w-4" /> Reintentar guardar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* MODAL DE RESUMEN PARA CLIENTA */}
-      <CustomerOrderSummaryModal
-        open={showSummaryModal}
-        onOpenChange={setShowSummaryModal}
-        order={createdOrderSummary}
-      />
+      {/* ========================================== */}
+      {/* MODAL DE ÉXITO Y RESUMEN DEL PEDIDO */}
+      {/* ========================================== */}
+      {createdOrderSummary && (
+        <CustomerOrderSummaryModal
+          open={showSuccessDialog}
+          onOpenChange={(open) => {
+            setShowSuccessDialog(open);
+            if (!open && createdOrderId) {
+              navigate({ to: "/pedidos/$orderId", params: { orderId: createdOrderId } });
+            }
+          }}
+          order={createdOrderSummary}
+        />
+      )}
     </>
   );
 }

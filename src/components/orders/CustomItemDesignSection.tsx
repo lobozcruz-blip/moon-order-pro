@@ -3,12 +3,12 @@ import {
   UploadCloud,
   Image as ImageIcon,
   Trash2,
-  Star,
   Eye,
   Plus,
   Sparkles,
   AlertCircle,
   X,
+  Camera,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -89,52 +89,52 @@ export function CustomItemDesignSection({
   };
 
   return (
-    <div className="space-y-4 rounded-xl border border-border/80 bg-secondary/30 p-3.5 sm:p-4">
+    <div className="space-y-4 rounded-2xl border-2 border-border/80 bg-secondary/30 p-4 sm:p-5">
       {/* 1. Switch de Personalizado */}
       {showToggle && (
-        <div className="flex items-center justify-between gap-3">
-          <div className="space-y-0.5">
+        <div className="flex items-center justify-between gap-4">
+          <div className="space-y-1">
             <Label
               htmlFor="custom-switch"
-              className="flex items-center gap-1.5 text-xs font-bold text-foreground cursor-pointer"
+              className="flex items-center gap-2 text-base font-bold text-foreground cursor-pointer"
             >
-              <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+              <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
               Este artículo es personalizado
             </Label>
-            <p className="text-[11px] text-muted-foreground">
-              Para diseños específicos enviados por la clienta (logotipos, nombres, personajes).
+            <p className="text-sm text-muted-foreground leading-snug">
+              Para diseños específicos enviados por la clienta (logotipos, nombres, personajes o bocetos).
             </p>
           </div>
           <Switch
             id="custom-switch"
             checked={isCustom}
             onCheckedChange={onIsCustomChange}
-            className="tap"
+            className="tap scale-110 shrink-0"
           />
         </div>
       )}
 
       {/* 2. Sección de Carga de Imágenes */}
       {(isCustom || images.length > 0) && (
-        <div className="space-y-3 pt-1 animate-in fade-in-50 duration-200">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
-              <ImageIcon className="h-3.5 w-3.5 text-primary" />
+        <div className="space-y-3.5 pt-2 animate-in fade-in-50 duration-200">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h4 className="text-sm font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
+              <ImageIcon className="h-4 w-4 text-primary" />
               {isCustom ? "Diseño personalizado (Obligatorio)" : "Imágenes de referencia (Opcional)"}
             </h4>
             {isCustom && images.length === 0 && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400">
-                <AlertCircle className="h-3 w-3" /> Requiere mín. 1 imagen
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+                <AlertCircle className="h-3.5 w-3.5" /> Requiere mín. 1 imagen
               </span>
             )}
             {images.length > 0 && (
-              <span className="text-[11px] text-muted-foreground">
-                {images.length} {images.length === 1 ? "imagen" : "imágenes"}
+              <span className="text-xs font-semibold text-muted-foreground">
+                {images.length} {images.length === 1 ? "imagen cargada" : "imágenes cargadas"}
               </span>
             )}
           </div>
 
-          {/* Zona de Drop & Carga */}
+          {/* Botón Grande Táctil para Cargar Imagen en Móvil & Desktop */}
           <div
             onDragOver={(e) => {
               e.preventDefault();
@@ -148,12 +148,12 @@ export function CustomItemDesignSection({
             }}
             onClick={() => fileInputRef.current?.click()}
             className={cn(
-              "tap flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-4 text-center transition-all",
+              "tap flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-5 text-center transition-all",
               isDragging
                 ? "border-primary bg-primary/10"
                 : isCustom && images.length === 0
-                ? "border-amber-500/50 bg-amber-500/5 hover:border-amber-400"
-                : "border-border bg-card/60 hover:border-primary/60 hover:bg-card",
+                ? "border-amber-500/60 bg-amber-500/10 hover:border-amber-400"
+                : "border-border bg-card/80 hover:border-primary/60 hover:bg-card",
             )}
           >
             <input
@@ -164,41 +164,41 @@ export function CustomItemDesignSection({
               className="hidden"
               onChange={(e) => {
                 handleFiles(e.target.files);
-                e.target.value = ""; // Permite seleccionar el mismo archivo de nuevo
+                e.target.value = "";
               }}
             />
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary text-primary">
-              <UploadCloud className="h-5 w-5" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+              <Camera className="h-6 w-6" />
             </div>
-            <p className="mt-2 text-xs font-semibold text-foreground">
-              Arrastra imágenes aquí o pulsa para seleccionar
+            <p className="mt-3 text-base font-bold text-foreground">
+              + AGREGAR IMAGEN DEL DISEÑO
             </p>
-            <p className="mt-0.5 text-[10px] text-muted-foreground">
-              Acepta JPG, PNG, WEBP · Puedes subir varias vistas, logos o capturas
+            <p className="mt-1 text-sm text-muted-foreground">
+              Toca para abrir cámara / galería o arrastra archivos aquí (JPG, PNG, WEBP)
             </p>
           </div>
 
-          {/* Miniaturas de imágenes cargadas */}
+          {/* Miniaturas Grandes de Imágenes Cargadas */}
           {images.length > 0 && (
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
               {images.map((img) => (
                 <div
                   key={img.id}
                   className={cn(
-                    "group relative flex flex-col overflow-hidden rounded-xl border bg-card transition-all",
-                    img.is_primary ? "border-primary ring-1 ring-primary" : "border-border",
+                    "group relative flex flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition-all",
+                    img.is_primary ? "border-primary ring-2 ring-primary" : "border-border",
                   )}
                 >
                   <div className="relative aspect-square w-full bg-secondary">
                     <img
                       src={img.previewUrl}
                       alt="Referencia personalizada"
-                      className="h-full w-full object-contain p-1"
+                      className="h-full w-full object-contain p-1.5"
                     />
 
                     {/* Badge Principal */}
                     {img.is_primary ? (
-                      <span className="absolute left-1.5 top-1.5 rounded-md bg-primary px-1.5 py-0.5 text-[9px] font-bold text-primary-foreground shadow-sm">
+                      <span className="absolute left-2 top-2 rounded-lg bg-primary px-2 py-0.5 text-xs font-bold text-primary-foreground shadow-sm">
                         Principal
                       </span>
                     ) : (
@@ -209,14 +209,14 @@ export function CustomItemDesignSection({
                           setPrimary(img.id);
                         }}
                         title="Marcar como principal"
-                        className="tap absolute left-1.5 top-1.5 rounded-md bg-background/80 px-1.5 py-0.5 text-[9px] font-semibold text-muted-foreground opacity-90 transition-opacity hover:bg-background hover:text-foreground"
+                        className="tap absolute left-2 top-2 rounded-lg bg-background/85 backdrop-blur-sm px-2 py-0.5 text-xs font-semibold text-muted-foreground hover:bg-background hover:text-foreground border border-border/60"
                       >
                         Hacer principal
                       </button>
                     )}
 
-                    {/* Botones de acción rápida */}
-                    <div className="absolute right-1.5 top-1.5 flex items-center gap-1">
+                    {/* Botones de acción rápida táctiles */}
+                    <div className="absolute right-2 top-2 flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={(e) => {
@@ -224,9 +224,10 @@ export function CustomItemDesignSection({
                           setPreviewModalImg(img.previewUrl);
                         }}
                         title="Ver imagen ampliada"
-                        className="tap flex h-6 w-6 items-center justify-center rounded-md bg-background/90 text-foreground shadow-sm hover:bg-primary hover:text-primary-foreground"
+                        className="tap flex h-8 w-8 items-center justify-center rounded-lg bg-background/90 text-foreground shadow-sm hover:bg-primary hover:text-primary-foreground border border-border/60"
+                        aria-label="Ver imagen grande"
                       >
-                        <Eye className="h-3 w-3" />
+                        <Eye className="h-4 w-4" />
                       </button>
                       <button
                         type="button"
@@ -235,9 +236,10 @@ export function CustomItemDesignSection({
                           removeImage(img.id);
                         }}
                         title="Eliminar imagen"
-                        className="tap flex h-6 w-6 items-center justify-center rounded-md bg-destructive/90 text-destructive-foreground shadow-sm hover:bg-destructive"
+                        className="tap flex h-8 w-8 items-center justify-center rounded-lg bg-destructive/90 text-destructive-foreground shadow-sm hover:bg-destructive"
+                        aria-label="Eliminar imagen"
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
                   </div>
@@ -248,13 +250,12 @@ export function CustomItemDesignSection({
 
           {/* Indicaciones del Personalizado */}
           <div className="space-y-1.5 pt-1">
-            <Label htmlFor="custom-notes" className="text-xs font-semibold text-foreground">
-              Indicaciones del personalizado
+            <Label className="text-sm font-semibold text-foreground">
+              Indicaciones del personalizado (opcional)
             </Label>
             <Textarea
-              id="custom-notes"
-              className="tap min-h-[64px] text-xs resize-none"
-              placeholder="Ej. usar exactamente este diseño, cambiar nombre por María, hacerlo sin fondo, conservar proporciones…"
+              className="tap min-h-[84px] text-base placeholder:text-muted-foreground/60 rounded-xl bg-card border-border"
+              placeholder="Ej. Realizar exactamente con este diseño, cambiar nombre por Camila, grosor de línea 1.2mm..."
               value={customNotes}
               onChange={(e) => onCustomNotesChange(e.target.value)}
             />
@@ -262,27 +263,29 @@ export function CustomItemDesignSection({
         </div>
       )}
 
-      {/* Botón discreto para artículos no personalizados si aún no tienen imágenes */}
-      {!isCustom && images.length === 0 && (
-        <button
-          type="button"
-          onClick={() => onIsCustomChange(true)}
-          className="tap inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Añadir imagen de referencia o marcar como personalizado
-        </button>
-      )}
-
-      {/* Modal Lightbox para ver imagen ampliada */}
+      {/* Modal de Imagen Ampliada */}
       <Dialog open={!!previewModalImg} onOpenChange={(open) => !open && setPreviewModalImg(null)}>
-        <DialogContent className="max-w-2xl p-2 bg-card/95 backdrop-blur-md">
-          <div className="relative flex max-h-[80vh] items-center justify-center overflow-hidden rounded-lg">
+        <DialogContent className="max-w-3xl border-border bg-card p-4 sm:p-6">
+          <div className="flex items-center justify-between pb-3 border-b border-border">
+            <h3 className="font-display text-lg font-bold text-foreground">
+              Vista previa del diseño
+            </h3>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="tap h-8 w-8"
+              onClick={() => setPreviewModalImg(null)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex max-h-[75vh] items-center justify-center overflow-hidden rounded-xl bg-black/40 p-2">
             {previewModalImg && (
               <img
                 src={previewModalImg}
-                alt="Vista previa ampliada"
-                className="max-h-[75vh] w-auto object-contain rounded"
+                alt="Diseño personalizado ampliado"
+                className="max-h-[70vh] w-auto max-w-full object-contain rounded-lg shadow-lg"
               />
             )}
           </div>
