@@ -78,6 +78,7 @@ import { ImageViewer } from "@/components/ImageViewer";
 import { CustomerOrderSummaryModal, type SummaryOrderData } from "@/components/CustomerOrderSummaryModal";
 import { OrderPrintSheetModal, type OrderPrintSheetData } from "@/components/OrderPrintSheetModal";
 import { CustomDesignViewerModal } from "@/components/orders/CustomDesignViewerModal";
+import { buildCustomerOrderSummary, resolveOrderItemDisplayImage } from "@/lib/order-summary";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -390,36 +391,10 @@ function DetallePedido() {
   const ship = Array.isArray(order.shipping_details) ? order.shipping_details[0] : order.shipping_details;
   const pers = Array.isArray(order.personal_delivery_details) ? order.personal_delivery_details[0] : order.personal_delivery_details;
 
-  const summaryData: SummaryOrderData = {
-    id: order.id,
-    folio: order.folio ?? "Pedido",
-    created_at: order.created_at ?? new Date().toISOString(),
-    customer_name: fullName(order.customers?.first_name, order.customers?.last_name) || "Cliente",
-    delivery_type: order.delivery_type as any,
-    items: (order.order_items ?? []).map((it: any) => {
-      const customImg = it.order_item_images?.[0]?.storage_path;
-      const prodImg = it.products?.product_images?.[0]?.storage_path;
-      return {
-        id: it.id,
-        name: it.product_name,
-        sku: it.product_sku || it.products?.sku || null,
-        category: it.category,
-        quantity: Number(it.quantity) || 1,
-        cutter_modality: it.cutter_modality as Modality | null,
-        cutter_size_cm: it.cutter_size_cm,
-        unit_price: Number(it.unit_price || 0),
-        subtotal: Number(it.subtotal || (it.unit_price || 0) * (it.quantity || 1)),
-        image_path: customImg || prodImg || null,
-      };
-    }),
-    subtotal: Number(order.subtotal || 0),
-    discount: Number(order.discount || 0),
-    shipping_cost: Number(order.shipping_cost || 0),
-    total: Number(order.total || 0),
-    total_paid: Number(order.paid_amount || 0),
-    balance: Number(order.balance ?? (order.total - (order.paid_amount || 0))),
-    is_paid: (order.balance ?? (order.total - (order.paid_amount || 0))) <= 0,
-  };
+  const summaryData: SummaryOrderData = useMemo(
+    () => buildCustomerOrderSummary(order),
+    [order],
+  );
 
   const printSheetData: OrderPrintSheetData = {
     id: order.id,
@@ -647,14 +622,11 @@ function DetallePedido() {
                 </div>
               ) : (
                 items.map((it) => {
+                  const resolvedImg = resolveOrderItemDisplayImage(it);
                   const customImgs = it.order_item_images ?? [];
                   const catalogImgs = ((it as { products?: { product_images?: ImgRef[] } }).products?.product_images ?? []) as ImgRef[];
-                  const primaryCustomImg = customImgs.find((img: any) => img.is_primary) ?? customImgs[0];
-                  const primaryCatalogImg = catalogImgs.find((img: any) => img.is_primary) ?? catalogImgs[0];
-                  const displayThumb = primaryCustomImg ?? primaryCatalogImg;
-
                   const catMeta = (it.category && CATEGORY_META[it.category as Category]) ?? CATEGORY_META.OTROS;
-                  const isCustom = it.is_custom || customImgs.length > 0;
+                  const isCustom = resolvedImg.isCustom;
 
                   return (
                     <div
@@ -679,8 +651,8 @@ function DetallePedido() {
                           }
                           aria-label="Ver diseño"
                         >
-                          {displayThumb ? (
-                            <StoredImage image={displayThumb} className="h-full w-full object-contain p-0.5" alt={it.product_name} />
+                          {resolvedImg.storagePath ? (
+                            <StoredImage image={{ storage_path: resolvedImg.storagePath }} className="h-full w-full object-contain p-0.5" alt={it.product_name} />
                           ) : (
                             <Package className="h-6 w-6 text-muted-foreground/40 mx-auto mt-7" />
                           )}

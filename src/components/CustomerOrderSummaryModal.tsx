@@ -35,36 +35,9 @@ import { useBrand, useBrandName } from "@/lib/brand";
 import { signedUrl } from "@/lib/storage";
 import { money, dateFmt, fullName, type Modality, MODALITIES } from "@/lib/cm";
 import { cn } from "@/lib/utils";
+import type { SummaryOrderData, SummaryItem } from "@/lib/order-summary";
 
-export type SummaryItem = {
-  id?: string;
-  name: string;
-  sku?: string | null;
-  category?: string;
-  quantity: number;
-  cutter_modality?: Modality | null;
-  cutter_size_cm?: number | null;
-  unit_price: number;
-  subtotal: number;
-  image_path?: string | null;
-  image_url?: string | null;
-};
-
-export type SummaryOrderData = {
-  id?: string;
-  folio: string;
-  created_at: string | Date;
-  customer_name: string;
-  delivery_type?: "envio" | "entrega_personal" | null;
-  items: SummaryItem[];
-  subtotal: number;
-  discount: number;
-  shipping_cost: number;
-  total: number;
-  total_paid?: number;
-  balance?: number;
-  is_paid?: boolean;
-};
+export type { SummaryOrderData, SummaryItem };
 
 export type CustomerOrderSummaryModalProps = {
   open: boolean;
@@ -72,7 +45,32 @@ export type CustomerOrderSummaryModalProps = {
   order: SummaryOrderData | null;
 };
 
-const ITEMS_PER_PAGE = 8;
+const ITEMS_PER_PAGE = 7;
+
+/**
+ * Espera de forma robusta a que todas las imágenes dentro de un contenedor HTML hayan cargado y decodificado
+ * antes de generar la captura PNG.
+ */
+async function waitForImages(container: HTMLElement): Promise<void> {
+  const images = Array.from(container.querySelectorAll("img"));
+  if (images.length === 0) return;
+
+  await Promise.all(
+    images.map(async (img) => {
+      if (!img.complete) {
+        await new Promise((resolve) => {
+          img.onload = resolve;
+          img.onerror = resolve;
+        });
+      }
+      try {
+        await img.decode();
+      } catch {
+        // Ignorar fallo de decodificación individual
+      }
+    }),
+  );
+}
 
 export function CustomerOrderSummaryModal({
   open,
@@ -83,15 +81,17 @@ export function CustomerOrderSummaryModal({
   const { data: brand } = useBrand();
 
   // Opciones de configuración de la imagen
-  const [showImages, setShowImages] = useState(false);
+  // Los personalizados siempre muestran su imagen; este switch permite mostrar también las de catálogo
+  const [showCatalogImages, setShowCatalogImages] = useState(true);
   const [showDeliveryType, setShowDeliveryType] = useState(false);
   const [paymentDisplay, setPaymentDisplay] = useState<"total" | "payments">("total");
   const [includeCustomMessage, setIncludeCustomMessage] = useState(false);
   const [customMessage, setCustomMessage] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [imagesLoading, setImagesLoading] = useState(false);
   const [activePreviewPage, setActivePreviewPage] = useState(0);
 
-  // URLs firmadas para imágenes de productos si showImages está activo
+  // URLs firmadas para imágenes de productos keyed por item.id
   const [itemImageUrls, setItemImageUrls] = useState<Record<string, string>>({});
 
   const pagesContainerRef = useRef<HTMLDivElement>(null);
@@ -99,29 +99,49 @@ export function CustomerOrderSummaryModal({
   // Soporte Web Share API
   const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
 
-  // Cargar imágenes firmadas si se activan
+  // Cargar imágenes firmadas para los artículos (personalizados + catálogo según opción)
   useEffect(() => {
-    if (!showImages || !order?.items) return;
+    if (!order?.items || order.items.length === 0) {
+      setItemImageUrls({});
+      return;
+    }
 
     let isMounted = true;
+    setImagesLoading(true);
+
     (async () => {
       const urls: Record<string, string> = {};
+
       for (const item of order.items) {
         const key = item.id || item.name;
+        const shouldResolve = item.is_custom || showCatalogImages;
+
+        if (!shouldResolve) continue;
+
         if (item.image_url) {
           urls[key] = item.image_url;
         } else if (item.image_path) {
-          const url = await signedUrl(item.image_path);
-          if (url && isMounted) urls[key] = url;
+          try {
+            const url = await signedUrl(item.image_path);
+            if (url && isMounted) {
+              urls[key] = url;
+            }
+          } catch (e) {
+            console.error(`Error resolving signed URL for item ${item.name} (${item.image_path}):`, e);
+          }
         }
       }
-      if (isMounted) setItemImageUrls(urls);
+
+      if (isMounted) {
+        setItemImageUrls(urls);
+        setImagesLoading(false);
+      }
     })();
 
     return () => {
       isMounted = false;
     };
-  }, [showImages, order]);
+  }, [order, showCatalogImages]);
 
   // División en páginas si hay muchos artículos
   const pages = useMemo(() => {
@@ -148,7 +168,8 @@ export function CustomerOrderSummaryModal({
     if (!pagesContainerRef.current) return;
     setIsGenerating(true);
     try {
-      // Pequeña pausa para asegurar renderizado completo en offscreen
+      // 1. Esperar decodificación y carga de imágenes
+      await waitForImages(pagesContainerRef.current);
       await new Promise((resolve) => setTimeout(resolve, 80));
 
       const pageElements = pagesContainerRef.current.querySelectorAll<HTMLElement>(".summary-export-canvas");
@@ -158,7 +179,6 @@ export function CustomerOrderSummaryModal({
         const el = pageElements[i];
         if (!el) continue;
 
-        // Pequeño retardo entre capturas consecutivas
         await new Promise((resolve) => setTimeout(resolve, 60));
 
         const dataUrl = await toPng(el, {
@@ -197,6 +217,7 @@ export function CustomerOrderSummaryModal({
     if (!pagesContainerRef.current || !canShare) return;
     setIsGenerating(true);
     try {
+      await waitForImages(pagesContainerRef.current);
       await new Promise((resolve) => setTimeout(resolve, 80));
 
       const pageElements = pagesContainerRef.current.querySelectorAll<HTMLElement>(".summary-export-canvas");
@@ -257,7 +278,7 @@ export function CustomerOrderSummaryModal({
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            Genera una tarjeta comercial con diseño claro para enviar por WhatsApp.
+            Genera una tarjeta comercial con diseño claro y fotos para enviar por WhatsApp.
           </p>
         </DialogHeader>
 
@@ -269,13 +290,15 @@ export function CustomerOrderSummaryModal({
               Opciones de la imagen
             </h3>
 
-            {/* Switch Mostrar Imágenes */}
+            {/* Switch Mostrar Imágenes del Catálogo */}
             <div className="flex items-center justify-between rounded-lg border border-border bg-secondary/50 p-2.5">
-              <div className="space-y-0.5">
-                <Label className="text-xs font-medium cursor-pointer">Mostrar miniaturas</Label>
-                <p className="text-[11px] text-muted-foreground">Incluye foto del producto</p>
+              <div className="space-y-0.5 pr-2">
+                <Label className="text-xs font-medium cursor-pointer">Imágenes del catálogo</Label>
+                <p className="text-[11px] text-muted-foreground">
+                  Los personalizados siempre muestran su diseño
+                </p>
               </div>
-              <Switch checked={showImages} onCheckedChange={setShowImages} />
+              <Switch checked={showCatalogImages} onCheckedChange={setShowCatalogImages} />
             </div>
 
             {/* Switch Mostrar Tipo de Entrega */}
@@ -298,22 +321,24 @@ export function CustomerOrderSummaryModal({
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="total" id="pay-total" />
                   <Label htmlFor="pay-total" className="text-xs cursor-pointer">
-                    Mostrar solamente total
+                    Solo total a pagar
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="payments" id="pay-detail" />
-                  <Label htmlFor="pay-detail" className="text-xs cursor-pointer">
-                    Mostrar pagos y saldo
+                  <RadioGroupItem value="payments" id="pay-details" />
+                  <Label htmlFor="pay-details" className="text-xs cursor-pointer">
+                    Desglose de anticipo y saldo
                   </Label>
                 </div>
               </RadioGroup>
             </div>
 
-            {/* Switch Mensaje Personalizado */}
+            {/* Mensaje Personalizado Opcional */}
             <div className="space-y-2 rounded-lg border border-border bg-secondary/50 p-2.5">
               <div className="flex items-center justify-between">
-                <Label className="text-xs font-medium cursor-pointer">Mensaje personalizado</Label>
+                <Label className="text-xs font-medium cursor-pointer">
+                  Mensaje al pie (opcional)
+                </Label>
                 <Switch
                   checked={includeCustomMessage}
                   onCheckedChange={setIncludeCustomMessage}
@@ -321,68 +346,33 @@ export function CustomerOrderSummaryModal({
               </div>
               {includeCustomMessage && (
                 <Input
-                  placeholder="Ej. Tu pedido comenzará a prepararse esta semana."
+                  className="tap text-xs h-8 mt-1.5"
+                  placeholder="Ej. ¡Muchas gracias por tu compra! 💕"
                   value={customMessage}
                   onChange={(e) => setCustomMessage(e.target.value)}
-                  className="tap text-xs h-8 mt-2"
                 />
               )}
             </div>
 
-            {/* Indicador de Páginas */}
-            {totalPages > 1 && (
-              <div className="rounded-lg bg-primary/10 border border-primary/20 p-2.5 text-center">
-                <p className="font-bold text-primary text-xs">
-                  Pedido grande: {totalPages} páginas
-                </p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">
-                  Se descargarán {totalPages} imágenes limpias y legibles.
-                </p>
+            {/* Estado de carga de imágenes */}
+            {imagesLoading && (
+              <div className="flex items-center gap-2 text-xs text-amber-500 bg-amber-500/10 p-2.5 rounded-lg border border-amber-500/20">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>Preparando imágenes de alta resolución...</span>
               </div>
             )}
           </div>
 
-          {/* Área de Vista Previa (Lienzo) */}
-          <div className="flex-1 flex flex-col bg-muted/40 overflow-hidden">
-            {/* Barra de navegación de páginas si hay varias */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card text-xs">
-                <span className="text-muted-foreground font-medium">
-                  Viendo página {activePreviewPage + 1} de {totalPages}
-                </span>
-                <div className="flex gap-1">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 w-7 p-0"
-                    disabled={activePreviewPage === 0}
-                    onClick={() => setActivePreviewPage((prev) => Math.max(0, prev - 1))}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 w-7 p-0"
-                    disabled={activePreviewPage === totalPages - 1}
-                    onClick={() => setActivePreviewPage((prev) => Math.min(totalPages - 1, prev + 1))}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Visor Interactivo de Vista Previa (Muestra solo la página activa) */}
-            <div className="flex-1 overflow-y-auto p-4 flex items-start justify-center">
+          {/* Panel de Vista Previa */}
+          <div className="p-4 flex flex-col items-center justify-between bg-muted/20 overflow-y-auto max-h-[50vh] lg:max-h-[70vh]">
+            <div className="w-full max-w-[420px] shadow-2xl rounded-2xl overflow-hidden border border-border">
               {pages[activePreviewPage] && (
                 <SummaryCard
-                  className="w-[480px] sm:w-[540px] rounded-2xl shadow-xl border border-[#EFCE8B]/60 p-6 sm:p-8"
                   pageItems={pages[activePreviewPage]}
                   pageIdx={activePreviewPage}
                   totalPages={totalPages}
                   order={order}
-                  showImages={showImages}
+                  showCatalogImages={showCatalogImages}
                   showDeliveryType={showDeliveryType}
                   paymentDisplay={paymentDisplay}
                   includeCustomMessage={includeCustomMessage}
@@ -395,46 +385,72 @@ export function CustomerOrderSummaryModal({
                 />
               )}
             </div>
+
+            {/* Navegación entre páginas si hay más de 1 */}
+            {totalPages > 1 && (
+              <div className="flex items-center gap-3 mt-4 text-xs">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="tap h-7 w-7 p-0"
+                  disabled={activePreviewPage === 0}
+                  onClick={() => setActivePreviewPage((p) => Math.max(0, p - 1))}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="font-semibold text-muted-foreground">
+                  Página {activePreviewPage + 1} de {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="tap h-7 w-7 p-0"
+                  disabled={activePreviewPage === totalPages - 1}
+                  onClick={() => setActivePreviewPage((p) => Math.min(totalPages - 1, p + 1))}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Contenedor OFFSCREEN dedicado para exportación perfecta de TODAS las páginas */}
+        {/* Lienzo oculto de renderizado para exportación de alta resolución */}
         <div
           ref={pagesContainerRef}
-          aria-hidden="true"
           style={{
             position: "fixed",
             left: "-9999px",
-            top: 0,
-            zIndex: -50,
+            top: "-9999px",
+            width: "560px",
             pointerEvents: "none",
             opacity: 1,
           }}
         >
-          {pages.map((pageItems, pageIdx) => (
+          {pages.map((pItems, pIdx) => (
             <SummaryCard
-              key={pageIdx}
-              className="summary-export-canvas w-[540px] rounded-2xl p-8 mb-8"
-              pageItems={pageItems}
-              pageIdx={pageIdx}
+              key={pIdx}
+              className="summary-export-canvas mb-8"
+              pageItems={pItems}
+              pageIdx={pIdx}
               totalPages={totalPages}
               order={order}
-              showImages={showImages}
+              showCatalogImages={showCatalogImages}
               showDeliveryType={showDeliveryType}
               paymentDisplay={paymentDisplay}
               includeCustomMessage={includeCustomMessage}
               customMessage={customMessage}
               brandName={brandName}
               itemImageUrls={itemImageUrls}
-              isLastPage={pageIdx === totalPages - 1}
+              isLastPage={pIdx === totalPages - 1}
               totalPaid={totalPaid}
               balance={balance}
             />
           ))}
         </div>
 
-        {/* Pie del Modal con Botones */}
-        <DialogFooter className="p-4 border-t border-border bg-card/80 flex items-center justify-between sm:justify-between shrink-0">
+        {/* Footer con Botones de Acción */}
+        <DialogFooter className="p-4 sm:p-5 border-t border-border bg-card/60 flex items-center justify-between gap-3 shrink-0">
           <Button
             type="button"
             variant="outline"
@@ -444,38 +460,37 @@ export function CustomerOrderSummaryModal({
             Cerrar
           </Button>
 
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             {canShare && (
               <Button
                 type="button"
-                variant="secondary"
-                disabled={isGenerating}
-                onClick={handleShare}
+                variant="outline"
                 className="tap font-semibold"
+                disabled={isGenerating || imagesLoading}
+                onClick={handleShare}
               >
                 {isGenerating ? (
                   <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
                 ) : (
                   <Share2 className="mr-1.5 h-4 w-4 text-primary" />
                 )}
-                {totalPages > 1 ? `Compartir (${totalPages} págs)` : "Compartir"}
+                Compartir
               </Button>
             )}
 
             <Button
               type="button"
-              disabled={isGenerating}
+              className="tap font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-md"
+              disabled={isGenerating || imagesLoading}
               onClick={handleDownload}
-              className="tap font-bold shadow-md shadow-primary/20 bg-primary text-primary-foreground hover:bg-primary/90"
             >
               {isGenerating ? (
                 <>
-                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Generando {totalPages > 1 ? `${totalPages} PNGs...` : "PNG..."}
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generando...
                 </>
               ) : (
                 <>
-                  <Download className="mr-1.5 h-4 w-4 stroke-[2.5]" />
-                  {totalPages > 1 ? `Descargar (${totalPages} imágenes)` : "Descargar PNG"}
+                  <Download className="mr-2 h-4 w-4" /> Descargar imagen PNG
                 </>
               )}
             </Button>
@@ -486,14 +501,16 @@ export function CustomerOrderSummaryModal({
   );
 }
 
-// Componente visual de la tarjeta de resumen para un lote de productos
+/**
+ * Tarjeta visual para el cliente con estética clara y comercial de Cookies Moon
+ */
 function SummaryCard({
   className,
   pageItems,
   pageIdx,
   totalPages,
   order,
-  showImages,
+  showCatalogImages,
   showDeliveryType,
   paymentDisplay,
   includeCustomMessage,
@@ -509,7 +526,7 @@ function SummaryCard({
   pageIdx: number;
   totalPages: number;
   order: SummaryOrderData;
-  showImages: boolean;
+  showCatalogImages: boolean;
   showDeliveryType: boolean;
   paymentDisplay: "total" | "payments";
   includeCustomMessage: boolean;
@@ -522,7 +539,7 @@ function SummaryCard({
 }) {
   return (
     <div
-      className={cn(className)}
+      className={cn("p-6 sm:p-7 space-y-4", className)}
       style={{
         backgroundColor: "#FFFFFF",
         color: "#181C25",
@@ -583,7 +600,7 @@ function SummaryCard({
       </div>
 
       {/* 2. LISTA DE PRODUCTOS DE LA PÁGINA */}
-      <div className="py-4 space-y-3">
+      <div className="py-2 space-y-3">
         <div className="flex items-center justify-between text-[11px] font-bold text-[#7D421F] uppercase tracking-wider border-b border-gray-100 pb-1">
           <span>Tu pedido</span>
           {totalPages > 1 && (
@@ -595,37 +612,48 @@ function SummaryCard({
 
         <div className="divide-y divide-gray-100">
           {pageItems.map((item, itIdx) => {
-            const imgUrl = itemImageUrls[item.id || item.name] || item.image_url;
+            const imgUrl = itemImageUrls[item.id] || item.image_url;
             const isCutter = item.category === "CORTADORES";
             const modalityLabel = isCutter
               ? MODALITIES.find((m) => m.value === item.cutter_modality)?.label ?? "Cortador"
               : null;
 
+            // Mostrar miniatura si es personalizado O si está activo el switch de catálogo
+            const shouldShowThumbnail = Boolean(item.is_custom || showCatalogImages);
+
             return (
-              <div key={itIdx} className="py-2.5 flex items-start gap-3 text-xs">
-                {showImages && (
-                  <div className="h-11 w-11 shrink-0 rounded-lg border border-gray-200 overflow-hidden bg-gray-50 flex items-center justify-center">
+              <div key={item.id || itIdx} className="py-2.5 flex items-start gap-3 text-xs">
+                {shouldShowThumbnail && (
+                  <div className="h-14 w-14 shrink-0 rounded-xl border border-[#EFCE8B]/40 overflow-hidden bg-white flex items-center justify-center p-0.5 shadow-sm">
                     {imgUrl ? (
                       <img
                         src={imgUrl}
-                        alt=""
-                        className="h-full w-full object-cover"
+                        alt={item.name}
+                        className="h-full w-full object-contain"
                         crossOrigin="anonymous"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = "none";
+                        }}
                       />
                     ) : (
-                      <Package className="h-5 w-5 text-gray-300" />
+                      <Package className="h-6 w-6 text-gray-300" />
                     )}
                   </div>
                 )}
 
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline gap-1.5">
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
                     <span className="font-bold text-[#7D421F] text-sm">
                       {item.quantity} ×
                     </span>
                     <span className="font-semibold text-gray-900 text-sm leading-tight">
                       {item.name}
                     </span>
+                    {item.is_custom && (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#EFCE8B]/40 text-[#7D421F] border border-[#7D421F]/20">
+                        <Sparkles className="h-2.5 w-2.5" /> PERSONALIZADO
+                      </span>
+                    )}
                   </div>
 
                   {/* Especificaciones de Cortador */}
@@ -657,85 +685,72 @@ function SummaryCard({
         </div>
       </div>
 
-      {/* 3. TOTALES Y RESUMEN FINANCIERO (Solo en la última página) */}
+      {/* 3. TOTALES (Solo en la última página) */}
       {isLastPage && (
-        <div className="border-t border-[#EFCE8B]/60 pt-3 space-y-1.5 text-xs">
+        <div className="border-t border-dashed border-[#EFCE8B] pt-4 space-y-2 text-xs">
           <div className="flex justify-between text-gray-600">
-            <span>Subtotal</span>
-            <span className="font-medium text-gray-900">{money(order.subtotal)}</span>
+            <span>Subtotal:</span>
+            <span className="font-medium text-gray-800">{money(order.subtotal)}</span>
           </div>
 
           {order.discount > 0 && (
-            <div className="flex justify-between text-rose-600">
-              <span>Descuento</span>
-              <span className="font-medium">-{money(order.discount)}</span>
+            <div className="flex justify-between text-emerald-600 font-medium">
+              <span>Descuento:</span>
+              <span>-{money(order.discount)}</span>
             </div>
           )}
 
           {order.shipping_cost > 0 && (
             <div className="flex justify-between text-gray-600">
-              <span>Envío</span>
-              <span className="font-medium text-gray-900">
-                {money(order.shipping_cost)}
-              </span>
+              <span>Costo de envío:</span>
+              <span className="font-medium text-gray-800">{money(order.shipping_cost)}</span>
             </div>
           )}
 
-          {/* TOTAL DESTACADO */}
-          <div className="mt-2 pt-2 border-t-2 border-[#5CC6D0] flex items-center justify-between">
-            <span className="font-display text-base font-bold text-[#7D421F]">
-              TOTAL
-            </span>
-            <span className="font-display text-2xl font-bold text-[#00838F]">
+          {/* Gran Total */}
+          <div className="flex items-baseline justify-between border-t border-gray-200 pt-2 text-sm">
+            <span className="font-bold text-gray-900">Total del pedido:</span>
+            <span
+              className="font-display text-xl font-bold"
+              style={{ color: "#7D421F" }}
+            >
               {money(order.total)}
             </span>
           </div>
 
-          {/* Sección de Pagos y Saldo (Si fue activada) */}
+          {/* Desglose de Pagos / Anticipos si se activó */}
           {paymentDisplay === "payments" && (
-            <div className="mt-3 p-2.5 rounded-xl bg-[#FCFBF8] border border-[#EFCE8B]/40 text-[11px] space-y-1">
+            <div className="mt-3 rounded-xl bg-[#FCFBF8] p-3 border border-[#EFCE8B]/40 space-y-1.5 text-xs">
               <div className="flex justify-between text-gray-600">
-                <span>Total a pagar</span>
-                <span className="font-semibold">{money(order.total)}</span>
-              </div>
-              <div className="flex justify-between text-emerald-700 font-medium">
-                <span>Pagado</span>
-                <span>{money(totalPaid)}</span>
-              </div>
-              <div className="flex justify-between font-bold pt-1 border-t border-gray-200">
-                <span className="text-gray-700">Saldo pendiente</span>
-                <span
-                  className={balance <= 0 ? "text-emerald-600" : "text-amber-700"}
-                >
-                  {balance <= 0 ? "¡PAGADO!" : money(balance)}
+                <span>Anticipo / Pagado:</span>
+                <span className="font-semibold text-emerald-600">
+                  {money(totalPaid)}
                 </span>
               </div>
-            </div>
-          )}
-
-          {/* Mensaje personalizado si está activo */}
-          {includeCustomMessage && customMessage.trim() && (
-            <div className="mt-3 p-2.5 rounded-xl bg-[#5CC6D0]/10 border border-[#5CC6D0]/30 text-center text-xs text-[#006064] font-medium">
-              "{customMessage.trim()}"
+              <div className="flex justify-between font-bold text-gray-900 border-t border-gray-100 pt-1">
+                <span>Saldo pendiente:</span>
+                <span style={{ color: balance > 0 ? "#7D421F" : "#10B981" }}>
+                  {balance > 0 ? money(balance) : "¡Liquidado! ✓"}
+                </span>
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* 4. PIE DE PÁGINA */}
-      <div className="mt-6 pt-4 border-t border-gray-100 text-center text-xs text-gray-500">
-        <p className="font-medium text-gray-700">
-          ¡Gracias por tu preferencia y confianza! 💛
-        </p>
-        <p className="text-[11px] font-bold text-[#7D421F] mt-0.5">
-          {brandName}
-        </p>
-        {totalPages > 1 && (
-          <p className="text-[10px] text-gray-400 mt-2">
-            Página {pageIdx + 1} de {totalPages} · Pedido {order.folio}
+      {/* 4. MENSAJE FINAL COMERCIAL */}
+      {isLastPage && (
+        <div className="text-center pt-3 border-t border-gray-100 space-y-1">
+          <p className="text-xs text-gray-600 font-medium italic">
+            {includeCustomMessage && customMessage.trim()
+              ? customMessage.trim()
+              : "¡Gracias por crear momentos especiales con Cookies Moon! ✨"}
           </p>
-        )}
-      </div>
+          <p className="text-[10px] text-gray-400">
+            Cortadores, stencils y herramientas de repostería con amor
+          </p>
+        </div>
+      )}
     </div>
   );
 }

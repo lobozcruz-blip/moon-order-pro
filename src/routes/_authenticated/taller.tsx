@@ -38,6 +38,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useProductionQueue, useProductThemes, useInvalidate } from "@/lib/queries";
 import { StoredImage } from "@/components/StoredImage";
 import { CustomDesignViewerModal } from "@/components/orders/CustomDesignViewerModal";
+import { resolveOrderItemDisplayImage } from "@/lib/order-summary";
 import {
   CATEGORIES,
   CATEGORY_META,
@@ -161,9 +162,8 @@ function TallerProduccion() {
       const size = it.cutter_size_cm || 0;
       const key = `${it.category}__${prodIdOrName}__${modality}__${size}`;
 
-      const prodImg = (it.products as any)?.product_images?.[0];
-      const customImg = (it.order_item_images as any)?.[0];
-      const img = customImg || prodImg;
+      const resolved = resolveOrderItemDisplayImage(it);
+      const img = resolved.storagePath ? { storage_path: resolved.storagePath } : null;
 
       const done = it.is_done ? it.quantity : it.done_quantity || 0;
       const pending = Math.max(0, it.quantity - done);

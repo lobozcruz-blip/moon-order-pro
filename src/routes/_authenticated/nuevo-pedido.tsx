@@ -82,6 +82,7 @@ import {
 import {
   CustomDesignViewerModal,
 } from "@/components/orders/CustomDesignViewerModal";
+import { buildCustomerOrderSummary, resolveOrderItemDisplayImage } from "@/lib/order-summary";
 import {
   CATEGORIES,
   CATEGORY_META,
@@ -617,48 +618,36 @@ function NuevoPedido() {
       await supabase.rpc("assign_folio", { _order_id: order.id });
       await logActivity({ action: "Pedido creado", entity: "order", order_id: order.id });
 
-      // Obtener folio final
-      const { data: updatedOrder } = await supabase
+      // Obtener el pedido completo recién persistido desde Supabase incluyendo order_item_images y productos
+      const { data: freshOrder } = await supabase
         .from("orders")
-        .select("folio, created_at")
+        .select(`
+          *,
+          customers(*),
+          order_items(
+            *,
+            order_item_images(*),
+            products(
+              id,
+              sku,
+              name,
+              category,
+              product_images(*)
+            )
+          ),
+          shipping_details(*),
+          personal_delivery_details(*)
+        `)
         .eq("id", order.id)
         .single();
 
-      const folioAssigned = updatedOrder?.folio ?? "Pedido";
-
-      const clientDisplayName =
-        customerId && customers
-          ? fullName(
-              customers.find((c) => c.id === customerId)?.first_name,
-              customers.find((c) => c.id === customerId)?.last_name,
-            )
-          : fullName(newCustomer.first_name, newCustomer.last_name) || "Cliente";
-
-      const summaryData: SummaryOrderData = {
-        id: order.id,
-        folio: folioAssigned,
-        created_at: updatedOrder?.created_at || new Date().toISOString(),
-        customer_name: clientDisplayName,
-        delivery_type: deliveryType,
-        items: items.map((it) => ({
-          name: it.product_name,
-          sku: it.product_sku,
-          category: it.category,
-          quantity: it.quantity,
-          cutter_modality: it.cutter_modality,
-          cutter_size_cm: it.cutter_size_cm,
-          unit_price: computedPrice(it),
-          subtotal: computedPrice(it) * it.quantity,
-          image_path: it.product_id
-            ? products.find((p) => p.id === it.product_id)?.product_images?.[0]?.storage_path ??
-              null
-            : null,
-        })),
-        subtotal,
-        shipping_cost: shippingCost,
-        discount: discountNum,
-        total,
-      };
+      const summaryData = buildCustomerOrderSummary(freshOrder ?? {
+        ...order,
+        customers: customerId && customers ? customers.find((c) => c.id === customerId) : newCustomer,
+        items,
+        shipping_details: shipping,
+        personal_delivery_details: delivery,
+      });
 
       setCreatedOrderId(order.id);
       setCreatedOrderSummary(summaryData);
