@@ -18,6 +18,7 @@ import {
   Flame,
   Clock,
   PrinterIcon,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/AppShell";
@@ -36,6 +37,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useProductionQueue, useProductThemes, useInvalidate } from "@/lib/queries";
 import { StoredImage } from "@/components/StoredImage";
+import { CustomDesignViewerModal } from "@/components/orders/CustomDesignViewerModal";
 import {
   CATEGORIES,
   CATEGORY_META,
@@ -97,6 +99,14 @@ function TallerProduccion() {
   const [themeFilter, setThemeFilter] = useState<string>("TODAS");
   const [onlyPending, setOnlyPending] = useState(true);
   const [viewMode, setViewMode] = useState<"batches" | "orders">("batches");
+  const [viewerItem, setViewerItem] = useState<{
+    title: string;
+    productSku?: string | null;
+    isCustom?: boolean;
+    customNotes?: string | null;
+    customImages?: any[];
+    catalogImages?: any[];
+  } | null>(null);
 
   // Filtrado de artículos
   const filteredItems = useMemo(() => {
@@ -616,6 +626,31 @@ function TallerProduccion() {
                             )}
                           </div>
 
+                          {/* Botón rápido para ver diseño personalizado en 1 toque */}
+                          {(it.order_item_images?.length > 0 || (it as any).is_custom || (it.products as any)?.product_images?.length > 0) && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              className="tap h-7 px-2 text-xs font-semibold bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 border border-amber-500/30 w-full justify-center"
+                              onClick={() =>
+                                setViewerItem({
+                                  title: it.product_name,
+                                  productSku: it.product_sku,
+                                  isCustom: (it as any).is_custom || (it.order_item_images?.length > 0),
+                                  customNotes: it.notes,
+                                  customImages: it.order_item_images ?? [],
+                                  catalogImages: (it.products as any)?.product_images ?? [],
+                                })
+                              }
+                            >
+                              <Eye className="mr-1.5 h-3.5 w-3.5" /> Ver diseño
+                              {it.order_item_images?.length > 0 && (
+                                <span className="ml-1 text-[10px] font-bold">({it.order_item_images.length})</span>
+                              )}
+                            </Button>
+                          )}
+
                           {/* Controles rápidos de avance */}
                           <div className="flex items-center justify-between pt-2 border-t border-border/60">
                             <span className="font-bold text-xs">
@@ -737,6 +772,28 @@ function TallerProduccion() {
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0">
+                          {/* Botón 1 toque para ver diseño */}
+                          {(it.order_item_images?.length > 0 || (it as any).is_custom || (it.products as any)?.product_images?.length > 0) && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              className="tap h-7 px-2 text-xs font-semibold bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 border border-amber-500/30"
+                              onClick={() =>
+                                setViewerItem({
+                                  title: it.product_name,
+                                  productSku: it.product_sku,
+                                  isCustom: (it as any).is_custom || (it.order_item_images?.length > 0),
+                                  customNotes: it.notes,
+                                  customImages: it.order_item_images ?? [],
+                                  catalogImages: (it.products as any)?.product_images ?? [],
+                                })
+                              }
+                            >
+                              <Eye className="mr-1 h-3.5 w-3.5" /> Ver diseño
+                            </Button>
+                          )}
+
                           <span className="font-bold text-xs">
                             {done} / {it.quantity} pzas
                           </span>
@@ -782,6 +839,18 @@ function TallerProduccion() {
           })}
         </div>
       )}
+
+      {/* Modal de visualización rápida de diseño para el trabajador */}
+      <CustomDesignViewerModal
+        open={!!viewerItem}
+        onOpenChange={(open) => !open && setViewerItem(null)}
+        title={viewerItem?.title ?? "Artículo"}
+        productSku={viewerItem?.productSku}
+        isCustom={viewerItem?.isCustom}
+        customNotes={viewerItem?.customNotes}
+        customImages={viewerItem?.customImages ?? []}
+        catalogImages={viewerItem?.catalogImages ?? []}
+      />
     </>
   );
 }

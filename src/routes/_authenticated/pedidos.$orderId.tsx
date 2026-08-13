@@ -14,6 +14,7 @@ import {
   Pencil,
   Package,
   FileText,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/AppShell";
@@ -76,6 +77,7 @@ import { StoredImage, type ImgRef } from "@/components/StoredImage";
 import { ImageViewer } from "@/components/ImageViewer";
 import { CustomerOrderSummaryModal, type SummaryOrderData } from "@/components/CustomerOrderSummaryModal";
 import { OrderPrintSheetModal, type OrderPrintSheetData } from "@/components/OrderPrintSheetModal";
+import { CustomDesignViewerModal } from "@/components/orders/CustomDesignViewerModal";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/pedidos/$orderId")({
@@ -115,6 +117,14 @@ function DetallePedido() {
   const invalidate = useInvalidate();
   const { isAdmin } = useAuth();
   const [viewer, setViewer] = useState<{ images: ImgRef[]; title: string } | null>(null);
+  const [customDesignViewer, setCustomDesignViewer] = useState<{
+    title: string;
+    productSku?: string | null;
+    isCustom?: boolean;
+    customNotes?: string | null;
+    customImages?: any[];
+    catalogImages?: any[];
+  } | null>(null);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showPrintSheetModal, setShowPrintSheetModal] = useState(false);
 
@@ -636,32 +646,67 @@ function DetallePedido() {
                 </div>
               ) : (
                 items.map((it) => {
-                  const imgs: ImgRef[] = [
-                    ...(it.order_item_images ?? []),
-                    ...(((it as { products?: { product_images?: ImgRef[] } }).products?.product_images ?? []) as ImgRef[]),
-                  ];
+                  const customImgs = it.order_item_images ?? [];
+                  const catalogImgs = ((it as { products?: { product_images?: ImgRef[] } }).products?.product_images ?? []) as ImgRef[];
+                  const primaryCustomImg = customImgs.find((img: any) => img.is_primary) ?? customImgs[0];
+                  const primaryCatalogImg = catalogImgs.find((img: any) => img.is_primary) ?? catalogImgs[0];
+                  const displayThumb = primaryCustomImg ?? primaryCatalogImg;
+
                   const catMeta = (it.category && CATEGORY_META[it.category as Category]) ?? CATEGORY_META.OTROS;
+                  const isCustom = it.is_custom || customImgs.length > 0;
+
                   return (
-                    <div key={it.id} className="panel p-3">
+                    <div
+                      key={it.id}
+                      className={cn(
+                        "panel p-3 transition-all",
+                        isCustom && "border-amber-500/40 bg-amber-500/5",
+                      )}
+                    >
                       <div className="flex gap-3">
                         <button
-                          className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-secondary"
-                          onClick={() => imgs.length && setViewer({ images: imgs, title: it.product_name })}
-                          aria-label="Ver imágenes"
+                          className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-border bg-secondary hover:ring-2 hover:ring-primary transition-all"
+                          onClick={() =>
+                            setCustomDesignViewer({
+                              title: it.product_name,
+                              productSku: it.product_sku,
+                              isCustom,
+                              customNotes: it.notes,
+                              customImages: customImgs,
+                              catalogImages: catalogImgs,
+                            })
+                          }
+                          aria-label="Ver diseño"
                         >
-                          <StoredImage image={imgs[0]} className="h-full w-full" alt={it.product_name} />
+                          {displayThumb ? (
+                            <StoredImage image={displayThumb} className="h-full w-full object-contain p-0.5" alt={it.product_name} />
+                          ) : (
+                            <Package className="h-6 w-6 text-muted-foreground/40 mx-auto mt-7" />
+                          )}
+                          {customImgs.length > 0 && (
+                            <span className="absolute bottom-1 right-1 rounded bg-black/85 px-1 text-[9px] font-bold text-white shadow-sm">
+                              📷 {customImgs.length}
+                            </span>
+                          )}
                         </button>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
-                            <span
-                              className="chip text-[10px] py-0 px-1.5"
-                              style={{
-                                color: `var(--${catMeta.token})`,
-                                background: `color-mix(in oklab, var(--${catMeta.token}) 16%, transparent)`,
-                              }}
-                            >
-                              {catMeta.label}
-                            </span>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span
+                                className="chip text-[10px] py-0 px-1.5"
+                                style={{
+                                  color: `var(--${catMeta.token})`,
+                                  background: `color-mix(in oklab, var(--${catMeta.token}) 16%, transparent)`,
+                                }}
+                              >
+                                {catMeta.label}
+                              </span>
+                              {isCustom && (
+                                <span className="chip text-[10px] py-0 px-1.5 bg-amber-500/20 text-amber-400 font-bold flex items-center gap-1">
+                                  <Sparkles className="h-2.5 w-2.5" /> PERSONALIZADO
+                                </span>
+                              )}
+                            </div>
                             <div className="flex items-center gap-1">
                               <Button
                                 type="button"
@@ -701,12 +746,16 @@ function DetallePedido() {
                               Precio manual: {it.price_override_reason ?? "sin motivo"}
                             </p>
                           )}
-                          {it.notes && <p className="mt-1 text-xs text-muted-foreground">{it.notes}</p>}
+                          {it.notes && (
+                            <p className="mt-1 text-xs text-amber-400/95 italic bg-amber-500/10 p-1.5 rounded border border-amber-500/20">
+                              📝 <strong>Indicaciones:</strong> {it.notes}
+                            </p>
+                          )}
                         </div>
                       </div>
 
                       <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border pt-3">
-                        <label className="flex items-center gap-2 text-sm">
+                        <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
                           <Checkbox
                             checked={it.is_done}
                             onCheckedChange={(v) => setItemDone(it.id, !!v, it.quantity)}
@@ -731,8 +780,32 @@ function DetallePedido() {
                             {dateTimeFmt(it.done_at)}
                           </span>
                         )}
-                        <label className="tap ml-auto flex cursor-pointer items-center gap-1 text-xs text-muted-foreground">
-                          <ImagePlus className="h-4 w-4" /> Foto
+
+                        {/* Botón rápido para ver diseño con 1 solo toque */}
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="tap h-7 px-2.5 text-xs font-semibold bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 border border-amber-500/30 ml-auto"
+                          onClick={() =>
+                            setCustomDesignViewer({
+                              title: it.product_name,
+                              productSku: it.product_sku,
+                              isCustom,
+                              customNotes: it.notes,
+                              customImages: customImgs,
+                              catalogImages: catalogImgs,
+                            })
+                          }
+                        >
+                          <Eye className="mr-1 h-3.5 w-3.5" /> Ver diseño
+                          {customImgs.length > 0 && (
+                            <span className="ml-1 text-[10px] font-bold">({customImgs.length})</span>
+                          )}
+                        </Button>
+
+                        <label className="tap flex cursor-pointer items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                          <ImagePlus className="h-4 w-4" /> + Foto
                           <input
                             type="file"
                             accept="image/*"
@@ -1403,6 +1476,17 @@ function DetallePedido() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <CustomDesignViewerModal
+        open={!!customDesignViewer}
+        onOpenChange={(open) => !open && setCustomDesignViewer(null)}
+        title={customDesignViewer?.title ?? "Artículo"}
+        productSku={customDesignViewer?.productSku}
+        isCustom={customDesignViewer?.isCustom}
+        customNotes={customDesignViewer?.customNotes}
+        customImages={customDesignViewer?.customImages ?? []}
+        catalogImages={customDesignViewer?.catalogImages ?? []}
+      />
 
       <ImageViewer
         open={!!viewer}

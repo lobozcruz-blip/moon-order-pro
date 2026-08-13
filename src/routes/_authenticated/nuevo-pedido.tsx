@@ -14,6 +14,7 @@ import {
   Download,
   Eye,
   RotateCcw,
+  ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/AppShell";
@@ -52,6 +53,13 @@ import {
   type SummaryOrderData,
 } from "@/components/CustomerOrderSummaryModal";
 import {
+  CustomItemDesignSection,
+  type CustomImageDraft,
+} from "@/components/orders/CustomItemDesignSection";
+import {
+  CustomDesignViewerModal,
+} from "@/components/orders/CustomDesignViewerModal";
+import {
   CATEGORIES,
   CATEGORY_META,
   MODALITIES,
@@ -65,7 +73,7 @@ import {
   type Priority,
   type DeliveryType,
 } from "@/lib/cm";
-import { logActivity } from "@/lib/storage";
+import { logActivity, uploadFile } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/nuevo-pedido")({
@@ -97,6 +105,8 @@ export type Item = {
   price_overridden: boolean;
   price_override_reason: string | null;
   notes: string;
+  is_custom: boolean;
+  custom_images: CustomImageDraft[];
   image_preview?: any;
 };
 
@@ -118,6 +128,8 @@ const createEmptyDraft = (
   price_overridden: false,
   price_override_reason: null,
   notes: "",
+  is_custom: false,
+  custom_images: [],
 });
 
 function NuevoPedido() {
@@ -203,7 +215,10 @@ function NuevoPedido() {
   const [editingPriceInput, setEditingPriceInput] = useState<string>("0");
   const [isEditOpen, setIsEditOpen] = useState(false);
 
-  // 5. Diálogos posteriores al guardado exitoso
+  // 5. Modal de visualización de diseño personalizado (1-tap)
+  const [viewerItem, setViewerItem] = useState<Item | null>(null);
+
+  // 6. Diálogos posteriores al guardado exitoso
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [createdOrderSummary, setCreatedOrderSummary] = useState<SummaryOrderData | null>(null);
@@ -235,8 +250,11 @@ function NuevoPedido() {
   const draftSubtotal = draftUnitPrice * draftItem.quantity;
 
   const subtotal = items.reduce((a, it) => a + computedPrice(it) * it.quantity, 0);
-  const shippingCost = deliveryType === "envio" ? (parseFloat(String(shipping.shipping_cost || 0).replace(',', '.')) || 0) : 0;
-  const discountNum = parseFloat(String(discount || 0).replace(',', '.')) || 0;
+  const shippingCost =
+    deliveryType === "envio"
+      ? parseFloat(String(shipping.shipping_cost || 0).replace(",", ".")) || 0
+      : 0;
+  const discountNum = parseFloat(String(discount || 0).replace(",", ".")) || 0;
   const total = Math.max(0, subtotal - discountNum + shippingCost);
   const totalUnits = items.reduce((a, it) => a + it.quantity, 0);
 
@@ -294,6 +312,14 @@ function NuevoPedido() {
       return;
     }
 
+    // VALIDACIÓN ESTRICTA: Imagen obligatoria si es personalizado
+    if (draftItem.is_custom && draftItem.custom_images.length === 0) {
+      toast.error(
+        "Añade al menos una imagen del diseño personalizado para poder fabricar este artículo.",
+      );
+      return;
+    }
+
     const calculatedUnitPrice = computedPrice(draftItem);
     const itemToAdd: Item = {
       ...draftItem,
@@ -308,9 +334,12 @@ function NuevoPedido() {
     }
 
     // Comprobar si existe un producto idéntico para sumar cantidades
+    // (Solo agrupamos si NO es personalizado o si tienen exactamente las mismas notas y sin imágenes específicas)
     const existingIndex = items.findIndex((it) => {
+      if (it.is_custom || draftItem.is_custom) return false; // Los personalizados se mantienen como líneas independientes
       const sameProduct = it.product_id && it.product_id === draftItem.product_id;
-      const sameName = it.product_name.trim().toLowerCase() === draftItem.product_name.trim().toLowerCase();
+      const sameName =
+        it.product_name.trim().toLowerCase() === draftItem.product_name.trim().toLowerCase();
       const sameCategory = it.category === draftItem.category;
       const sameModality = it.cutter_modality === draftItem.cutter_modality;
       const sameSize = it.cutter_size_cm === draftItem.cutter_size_cm;
@@ -340,95 +369,104 @@ function NuevoPedido() {
     } else {
       // Añadir nueva fila
       setItems((prev) => [...prev, itemToAdd]);
-      toast.success(`"${draftItem.product_name}" añadido al pedido`);
+      toast.success(
+        draftItem.is_custom
+          ? `Artículo personalizado "${draftItem.product_name}" añadido con ${draftItem.custom_images.length} imagen(es)`
+          : `"${draftItem.product_name}" añadido al pedido`,
+      );
     }
 
-    // 1. Reiniciar draftItem conservando categoría, temática, modalidad y tamaño
+    // 1. Reiniciar draftItem conservando categoría, modalidad y tamaño pero limpiando imágenes
     const nextModality = draftItem.cutter_modality || lastModality;
     const nextSize = draftItem.cutter_size_cm || lastSize;
 
     setManualMode(false);
+    setDraftItem({
+      ...createEmptyDraft(draftItem.category, nextModality, nextSize),
+      is_custom: false,
+      custom_images: [],
+    });
     setDraftPriceInput("0");
-    setDraftItem(createEmptyDraft(draftItem.category, nextModality, nextSize));
-
-    // 2. Limpiar texto de búsqueda
     setSearchQuery("");
 
-    // 3. Regresar foco inmediatamente al buscador
+    // 2. Regresar el foco al buscador
     setTimeout(() => {
       searchInputRef.current?.focus();
     }, 50);
   };
 
   // ==========================================
-  // ACCIONES SOBRE PRODUCTOS AÑADIDOS
+  // EDICIÓN DE ARTÍCULO YA AÑADIDO
   // ==========================================
-  const handleRemoveItem = (index: number) => {
-    const itemToRemove = items[index];
-    if (!itemToRemove) return;
-    setItems((prev) => prev.filter((_, i) => i !== index));
-
-    toast(`"${itemToRemove.product_name}" eliminado`, {
-      action: {
-        label: "Deshacer",
-        onClick: () => {
-          setItems((prev) => {
-            const next = [...prev];
-            next.splice(index, 0, itemToRemove);
-            return next;
-          });
-        },
-      },
+  const startEditItem = (it: Item) => {
+    setEditingItem({
+      ...it,
+      custom_images: [...it.custom_images],
     });
-  };
-
-  const handleDuplicateItem = (item: Item) => {
-    const duplicated: Item = {
-      ...item,
-      key: crypto.randomUUID(),
-    };
-    setItems((prev) => [...prev, duplicated]);
-    toast.success(`Copia creada de "${item.product_name}"`);
-  };
-
-  const openEditModal = (item: Item) => {
-    setEditingItem({ ...item });
-    setEditingPriceInput(String(item.price_overridden ? item.unit_price : computedPrice(item)));
+    setEditingPriceInput(String(it.unit_price));
     setIsEditOpen(true);
   };
 
   const saveEditedItem = () => {
     if (!editingItem) return;
+
     if (!editingItem.product_name.trim()) {
       toast.error("El nombre no puede estar vacío");
       return;
     }
-    const updatedPrice = computedPrice(editingItem);
+    if (editingItem.quantity <= 0) {
+      toast.error("La cantidad debe ser al menos 1");
+      return;
+    }
+
+    if (editingItem.is_custom && editingItem.custom_images.length === 0) {
+      toast.error(
+        "Añade al menos una imagen del diseño personalizado para poder fabricar este artículo.",
+      );
+      return;
+    }
+
     setItems((prev) =>
-      prev.map((it) =>
-        it.key === editingItem.key
-          ? {
-              ...editingItem,
-              unit_price: updatedPrice,
-            }
-          : it,
-      ),
+      prev.map((it) => (it.key === editingItem.key ? { ...editingItem } : it)),
     );
+    toast.success(`Artículo "${editingItem.product_name}" actualizado`);
     setIsEditOpen(false);
     setEditingItem(null);
-    toast.success("Artículo actualizado");
   };
 
-  // Atajos de teclado en el configurador
-  const handleKeyDownOnDraft = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && (e.ctrlKey || e.metaKey || (e.target as HTMLElement).tagName !== "TEXTAREA")) {
-      e.preventDefault();
-      addDraftToOrder();
-    }
+  // ==========================================
+  // DUPLICAR ARTÍCULO
+  // ==========================================
+  const duplicateItem = (key: string) => {
+    const itemToDup = items.find((it) => it.key === key);
+    if (!itemToDup) return;
+
+    const duplicated: Item = {
+      ...itemToDup,
+      key: crypto.randomUUID(),
+      // Clonar referencias de imágenes con IDs independientes
+      custom_images: itemToDup.custom_images.map((img) => ({
+        ...img,
+        id: crypto.randomUUID(),
+      })),
+    };
+
+    setItems((prev) => [...prev, duplicated]);
+    toast.success(`"${itemToDup.product_name}" duplicado`);
   };
 
-  // Reiniciar formulario por completo
+  // ==========================================
+  // ELIMINAR ARTÍCULO
+  // ==========================================
+  const removeItem = (key: string) => {
+    setItems((prev) => prev.filter((it) => it.key !== key));
+  };
+
+  // ==========================================
+  // REINICIAR FORMULARIO COMPLETO
+  // ==========================================
   const resetForm = () => {
+    setItems([]);
     setCustomerId("");
     setNewCustomer({ first_name: "", last_name: "", phone: "", contact_channel: "WhatsApp" });
     setCustomerSearch("");
@@ -437,13 +475,13 @@ function NuevoPedido() {
     setAssignee("");
     setDiscount("0");
     setNote("");
-    setItems([]);
     setManualMode(false);
     setDraftItem(createEmptyDraft("CORTADORES", lastModality, lastSize));
+    setDraftPriceInput("0");
     setSearchQuery("");
     setShowSuccessDialog(false);
-    setCreatedOrderSummary(null);
     setCreatedOrderId(null);
+    setCreatedOrderSummary(null);
   };
 
   // ==========================================
@@ -497,6 +535,7 @@ function NuevoPedido() {
         .single();
       if (oErr) throw oErr;
 
+      // Inserción de order_items con is_custom
       const rows = items.map((it, idx) => ({
         order_id: order.id,
         category: it.category,
@@ -512,11 +551,53 @@ function NuevoPedido() {
         price_overridden: it.price_overridden,
         price_override_reason: it.price_override_reason,
         notes: it.notes || null,
+        is_custom: it.is_custom,
         sort_order: idx,
       }));
 
-      const { error: iErr } = await supabase.from("order_items").insert(rows);
+      const { data: createdItems, error: iErr } = await supabase
+        .from("order_items")
+        .insert(rows)
+        .select("id, sort_order");
+
       if (iErr) throw iErr;
+
+      // Subir y guardar imágenes de diseño personalizado para cada order_item
+      for (let idx = 0; idx < items.length; idx++) {
+        const it = items[idx];
+        const createdItem = createdItems?.[idx];
+        if (!createdItem || it.custom_images.length === 0) continue;
+
+        for (let imgIdx = 0; imgIdx < it.custom_images.length; imgIdx++) {
+          const customImg = it.custom_images[imgIdx];
+          let storagePath = customImg.storage_path;
+
+          if (customImg.file) {
+            try {
+              const ext = customImg.file.name.split(".").pop() ?? "webp";
+              const keyHint = `items/${createdItem.id}`;
+              storagePath = await uploadFile("pedidos", customImg.file, `${order.id}/${keyHint}`);
+            } catch (err: any) {
+              console.error("Error uploading custom image:", err);
+              toast.error(
+                `No se pudo guardar la imagen de referencia de "${it.product_name}". Intenta nuevamente.`,
+              );
+              throw err;
+            }
+          }
+
+          if (storagePath) {
+            const { error: imgErr } = await supabase.from("order_item_images").insert({
+              order_item_id: createdItem.id,
+              storage_path: storagePath,
+              is_primary: customImg.is_primary,
+              image_type: "custom_reference",
+              sort_order: imgIdx,
+            });
+            if (imgErr) console.error("Error inserting order_item_images:", imgErr);
+          }
+        }
+      }
 
       if (deliveryType === "envio") {
         await supabase.from("shipping_details").insert({
@@ -595,25 +676,26 @@ function NuevoPedido() {
           unit_price: computedPrice(it),
           subtotal: computedPrice(it) * it.quantity,
           image_path: it.product_id
-            ? (products.find((p) => p.id === it.product_id)?.product_images?.[0]?.storage_path ?? null)
+            ? products.find((p) => p.id === it.product_id)?.product_images?.[0]?.storage_path ??
+              null
             : null,
         })),
-        subtotal,
-        discount: Number(discount || 0),
         shipping_cost: shippingCost,
+        discount: discountNum,
         total,
-        total_paid: 0,
-        balance: total,
-        is_paid: false,
+        advance_payment: 0,
+        due_date: dueDate || null,
+        personal_delivery_place: deliveryType === "entrega_personal" ? delivery.place : undefined,
+        personal_delivery_time:
+          deliveryType === "entrega_personal" ? delivery.delivery_time : undefined,
       };
 
-      setCreatedOrderSummary(summaryData);
       setCreatedOrderId(order.id);
+      setCreatedOrderSummary(summaryData);
       setShowSuccessDialog(true);
-      toast.success(`¡Pedido ${folioAssigned} registrado exitosamente!`);
-      invalidate("orders", "customers", "activity");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo guardar el pedido");
+      invalidate("orders", "production-queue", "dashboard-sales-summary", "sales-analytics");
+    } catch (e: any) {
+      toast.error(e.message ?? "Error al guardar el pedido");
     } finally {
       setSaving(false);
     }
@@ -623,166 +705,157 @@ function NuevoPedido() {
     <>
       <PageHeader
         title="Nuevo pedido"
-        subtitle="Captura ágil de artículos, cliente y entrega"
+        subtitle="Captura rápida de productos y personalizaciones para el taller"
       />
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px]">
-        {/* COLUMNA PRINCIPAL (Izquierda) */}
-        <div className="space-y-5">
+      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+        {/* COLUMNA PRINCIPAL */}
+        <div className="space-y-6">
           {/* 1. SECCIÓN CLIENTE */}
           <section className="panel p-4 sm:p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-display text-lg">1. Cliente</h2>
-              {customerId && (
-                <button
-                  type="button"
-                  onClick={() => setCustomerId("")}
-                  className="text-xs text-primary underline"
-                >
-                  Cambiar / Nuevo cliente
-                </button>
-              )}
-            </div>
+            <h2 className="mb-3 font-display text-lg">1. Cliente</h2>
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  className="tap pl-9 text-sm"
+                  placeholder="Buscar cliente existente por nombre o teléfono…"
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                />
+              </div>
 
-            <div className="relative mb-3">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="tap pl-9"
-                placeholder="Buscar cliente por nombre o teléfono..."
-                value={customerSearch}
-                onChange={(e) => setCustomerSearch(e.target.value)}
-              />
-            </div>
-
-            {/* Chips de clientes frecuentes / encontrados */}
-            <div className="mb-3 flex max-h-32 flex-wrap gap-1.5 overflow-y-auto pr-1">
-              {filteredCustomers.slice(0, 10).map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setCustomerId(customerId === c.id ? "" : c.id)}
-                  className={cn(
-                    "chip border text-xs transition-colors",
-                    customerId === c.id
-                      ? "bg-primary text-primary-foreground font-bold border-primary shadow-sm"
-                      : "border-border text-muted-foreground hover:bg-secondary",
+              {customerSearch && (
+                <div className="max-h-48 overflow-y-auto divide-y divide-border rounded-lg border border-border bg-background">
+                  {filteredCustomers.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setCustomerId(c.id);
+                        setCustomerSearch("");
+                      }}
+                      className="tap flex w-full items-center justify-between p-2.5 text-left text-xs hover:bg-secondary"
+                    >
+                      <span className="font-semibold">{fullName(c.first_name, c.last_name)}</span>
+                      <span className="text-muted-foreground">{c.phone}</span>
+                    </button>
+                  ))}
+                  {filteredCustomers.length === 0 && (
+                    <p className="p-3 text-center text-xs text-muted-foreground">
+                      No se encontró ningún cliente. Puedes registrarlo abajo.
+                    </p>
                   )}
-                >
-                  {fullName(c.first_name, c.last_name)}
-                  {c.phone ? ` (${c.phone.slice(-4)})` : ""}
-                </button>
-              ))}
-            </div>
+                </div>
+              )}
 
-            {!customerId && (
-              <div className="rounded-xl border border-dashed border-border/80 bg-secondary/30 p-3.5">
-                <p className="mb-2 text-xs font-semibold text-muted-foreground">
-                  O registrar nuevo cliente:
-                </p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
+              {customerId ? (
+                <div className="flex items-center justify-between rounded-lg bg-primary/10 p-3 text-sm text-primary">
+                  <div>
+                    <span className="font-semibold">
+                      {fullName(
+                        customers?.find((c) => c.id === customerId)?.first_name,
+                        customers?.find((c) => c.id === customerId)?.last_name,
+                      )}
+                    </span>
+                    <p className="text-xs text-muted-foreground">
+                      {customers?.find((c) => c.id === customerId)?.phone}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="tap text-xs"
+                    onClick={() => setCustomerId("")}
+                  >
+                    Cambiar
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid gap-3 pt-1 sm:grid-cols-3">
+                  <div className="space-y-1">
                     <Label className="text-xs">Nombre *</Label>
                     <Input
                       className="tap h-9 text-sm"
+                      placeholder="Nombre del cliente"
                       value={newCustomer.first_name}
-                      onChange={(e) => setNewCustomer({ ...newCustomer, first_name: e.target.value })}
+                      onChange={(e) =>
+                        setNewCustomer({ ...newCustomer, first_name: e.target.value })
+                      }
                     />
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1">
                     <Label className="text-xs">Apellido</Label>
                     <Input
                       className="tap h-9 text-sm"
+                      placeholder="Apellido (opcional)"
                       value={newCustomer.last_name}
-                      onChange={(e) => setNewCustomer({ ...newCustomer, last_name: e.target.value })}
+                      onChange={(e) =>
+                        setNewCustomer({ ...newCustomer, last_name: e.target.value })
+                      }
                     />
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1">
                     <Label className="text-xs">Teléfono</Label>
                     <Input
                       className="tap h-9 text-sm"
-                      inputMode="tel"
+                      placeholder="Teléfono / WhatsApp"
                       value={newCustomer.phone}
                       onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
                     />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Canal de contacto</Label>
-                    <Select
-                      value={newCustomer.contact_channel}
-                      onValueChange={(v) => setNewCustomer({ ...newCustomer, contact_channel: v })}
-                    >
-                      <SelectTrigger className="tap h-9 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CONTACT_CHANNELS.map((c) => (
-                          <SelectItem key={c} value={c}>
-                            {c}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </section>
 
-          {/* 2. SECCIÓN AÑADIR PRODUCTO (CAPTURA ÁGIL Y COMPACTA) */}
-          <section className="panel p-4 sm:p-5">
-            <div className="mb-3 flex items-center justify-between">
+          {/* 2. SECCIÓN CONFIGURADOR DE ARTÍCULO RÁPIDO */}
+          <section className="panel p-4 sm:p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-border pb-3">
               <div>
-                <h2 className="font-display text-lg">2. Añadir producto</h2>
+                <h2 className="font-display text-lg flex items-center gap-2">
+                  <span>2. Catálogo & Configuración de Producto</span>
+                </h2>
                 <p className="text-xs text-muted-foreground">
-                  Busca por SKU o nombre, ajusta especificaciones y añade al pedido.
+                  Elige un producto o configúralo como personalizado con sus fotos de diseño.
                 </p>
               </div>
-              <span className="chip bg-primary/10 text-primary font-bold text-xs">
-                {items.length} añadidos ({totalUnits} pzas)
-              </span>
+
+              <Button
+                type="button"
+                variant={manualMode ? "secondary" : "outline"}
+                size="sm"
+                className="tap text-xs font-semibold"
+                onClick={() => handleProductSelect(null)}
+              >
+                <Sparkles className="mr-1 h-3.5 w-3.5 text-amber-400" />
+                Artículo manual / a medida
+              </Button>
             </div>
 
-            {/* UN SOLO BUSCADOR UNIVERSAL */}
-            <ProductPicker
-              products={products}
-              themes={themes}
-              categoryFilter={categoryFilter}
-              onCategoryFilterChange={setCategoryFilter}
-              themeFilter={themeFilter}
-              onThemeFilterChange={setThemeFilter}
-              searchQuery={searchQuery}
-              onSearchQueryChange={setSearchQuery}
-              searchInputRef={searchInputRef}
-              selectedProductId={draftItem.product_id}
-              onSelect={handleProductSelect}
-              className="mb-4"
-            />
+            {/* Picker de Productos Universal con Temáticas */}
+            {!manualMode && (
+              <ProductPicker
+                products={products}
+                themes={themes}
+                selectedId={draftItem.product_id}
+                onSelect={handleProductSelect}
+                categoryFilter={categoryFilter}
+                onCategoryFilterChange={setCategoryFilter}
+                themeFilter={themeFilter}
+                onThemeFilterChange={setThemeFilter}
+                searchQuery={searchQuery}
+                onSearchQueryChange={setSearchQuery}
+                searchInputRef={searchInputRef}
+              />
+            )}
 
-            {/* CONFIGURADOR DEL PRODUCTO SELECCIONADO */}
-            <div
-              onKeyDown={handleKeyDownOnDraft}
-              className={cn(
-                "rounded-xl border p-4 transition-all",
-                manualMode || draftItem.product_name || draftItem.product_id !== null
-                  ? "border-primary/60 bg-secondary/60 shadow-sm ring-1 ring-primary/20"
-                  : "border-dashed border-border bg-card/40",
-              )}
-            >
-              {manualMode || draftItem.product_id !== null || draftItem.product_name ? (
-                <div className="space-y-4">
-                  {/* Encabezado del producto seleccionado */}
-                  <div className="flex items-center gap-3 border-b border-border/60 pb-3">
-                    <span className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-background">
-                      {draftItem.image_preview ? (
-                        <StoredImage
-                          image={draftItem.image_preview}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <Package className="h-6 w-6 text-muted-foreground opacity-60" />
-                      )}
-                    </span>
+            {/* CONFIGURADOR DEL ARTÍCULO DRAFT */}
+            <div className="rounded-2xl border-2 border-primary/40 bg-card p-4 shadow-sm space-y-4">
+              {draftItem.product_name || manualMode ? (
+                <div className="space-y-4 animate-in fade-in-50 duration-200">
+                  {/* Encabezado del artículo en configuración */}
+                  <div className="flex items-center justify-between border-b border-border pb-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         {draftItem.product_sku && (
@@ -791,16 +864,21 @@ function NuevoPedido() {
                           </span>
                         )}
                         <span
-                          className="chip text-[10px] py-0 px-1.5"
+                          className="chip text-[10px] py-0 px-2 font-bold"
                           style={{
-                            color: `var(--${CATEGORY_META[draftItem.category].token})`,
-                            background: `color-mix(in oklab, var(--${CATEGORY_META[draftItem.category].token}) 16%, transparent)`,
+                            color: `var(--${CATEGORY_META[draftItem.category]?.token ?? "primary"})`,
+                            background: `color-mix(in oklab, var(--${CATEGORY_META[draftItem.category]?.token ?? "primary"}) 16%, transparent)`,
                           }}
                         >
-                          {CATEGORY_META[draftItem.category].label}
+                          {CATEGORY_META[draftItem.category]?.label ?? draftItem.category}
                         </span>
+                        {draftItem.is_custom && (
+                          <span className="chip text-[10px] py-0 px-2 bg-amber-500/15 text-amber-400 font-bold flex items-center gap-1">
+                            <Sparkles className="h-2.5 w-2.5" /> Personalizado
+                          </span>
+                        )}
                       </div>
-                      <p className="truncate text-base font-semibold text-foreground">
+                      <p className="truncate text-base font-semibold text-foreground mt-0.5">
                         {draftItem.product_name || "Artículo personalizado"}
                       </p>
                     </div>
@@ -847,13 +925,21 @@ function NuevoPedido() {
                             onValueChange={(v) => {
                               const newCat = v as Category;
                               const isCutter = newCat === "CORTADORES";
-                              const autoPrice = isCutter ? priceFor(rules, draftItem.cutter_modality ?? lastModality, draftItem.cutter_size_cm ?? lastSize) : 0;
+                              const autoPrice = isCutter
+                                ? priceFor(
+                                    rules,
+                                    draftItem.cutter_modality ?? lastModality,
+                                    draftItem.cutter_size_cm ?? lastSize,
+                                  )
+                                : 0;
                               setDraftPriceInput(String(autoPrice));
                               setDraftItem((prev) => ({
                                 ...prev,
                                 category: newCat,
-                                cutter_modality: isCutter ? (prev.cutter_modality ?? lastModality) : null,
-                                cutter_size_cm: isCutter ? (prev.cutter_size_cm ?? lastSize) : null,
+                                cutter_modality: isCutter
+                                  ? prev.cutter_modality ?? lastModality
+                                  : null,
+                                cutter_size_cm: isCutter ? prev.cutter_size_cm ?? lastSize : null,
                                 unit_price: autoPrice,
                                 price_overridden: false,
                               }));
@@ -883,7 +969,11 @@ function NuevoPedido() {
                             value={draftItem.cutter_modality ?? "cutter_only"}
                             onValueChange={(v) => {
                               const newMod = v as Modality;
-                              const autoPrice = priceFor(rules, newMod, draftItem.cutter_size_cm ?? lastSize);
+                              const autoPrice = priceFor(
+                                rules,
+                                newMod,
+                                draftItem.cutter_size_cm ?? lastSize,
+                              );
                               setDraftPriceInput(String(autoPrice));
                               setDraftItem((prev) => ({
                                 ...prev,
@@ -912,7 +1002,11 @@ function NuevoPedido() {
                             value={String(draftItem.cutter_size_cm ?? 8)}
                             onValueChange={(v) => {
                               const newSize = Number(v);
-                              const autoPrice = priceFor(rules, draftItem.cutter_modality ?? lastModality, newSize);
+                              const autoPrice = priceFor(
+                                rules,
+                                draftItem.cutter_modality ?? lastModality,
+                                newSize,
+                              );
                               setDraftPriceInput(String(autoPrice));
                               setDraftItem((prev) => ({
                                 ...prev,
@@ -992,7 +1086,7 @@ function NuevoPedido() {
                           onChange={(e) => {
                             const raw = e.target.value;
                             setDraftPriceInput(raw);
-                            const parsed = parseFloat(raw.replace(',', '.')) || 0;
+                            const parsed = parseFloat(raw.replace(",", ".")) || 0;
                             setDraftItem((prev) => ({
                               ...prev,
                               price_overridden: true,
@@ -1002,20 +1096,23 @@ function NuevoPedido() {
                         />
                       </div>
                     )}
-
-                    {/* NOTAS DEL ARTÍCULO */}
-                    <div className="space-y-1 sm:col-span-2 lg:col-span-3">
-                      <Label className="text-xs">Notas opcionales para producción / personalización</Label>
-                      <Input
-                        className="tap h-9 text-sm"
-                        placeholder="Ej. Color especial, nombre personalizado, etc."
-                        value={draftItem.notes}
-                        onChange={(e) =>
-                          setDraftItem((prev) => ({ ...prev, notes: e.target.value }))
-                        }
-                      />
-                    </div>
                   </div>
+
+                  {/* SECCIÓN DE DISEÑO PERSONALIZADO E IMÁGENES */}
+                  <CustomItemDesignSection
+                    isCustom={draftItem.is_custom}
+                    onIsCustomChange={(isCustom) =>
+                      setDraftItem((prev) => ({ ...prev, is_custom: isCustom }))
+                    }
+                    images={draftItem.custom_images}
+                    onImagesChange={(custom_images) =>
+                      setDraftItem((prev) => ({ ...prev, custom_images }))
+                    }
+                    customNotes={draftItem.notes}
+                    onCustomNotesChange={(notes) =>
+                      setDraftItem((prev) => ({ ...prev, notes }))
+                    }
+                  />
 
                   {/* Resumen de precio de este producto y Botón AÑADIR */}
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-background/80 p-3 border border-border/80">
@@ -1079,32 +1176,68 @@ function NuevoPedido() {
                 </p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {items.map((it, idx) => {
+              <div className="space-y-2.5">
+                {items.map((it) => {
                   const price = computedPrice(it);
                   const itemSubtotal = price * it.quantity;
                   const prod = products.find((p) => p.id === it.product_id);
-                  const img =
+
+                  // Prioridad de miniatura: personalizada principal > personalizada secundaria > catálogo
+                  const customPrimary =
+                    it.custom_images.find((img) => img.is_primary) ?? it.custom_images[0];
+                  const catalogImg =
                     (prod?.product_images ?? []).find((i: any) => i.is_primary) ??
                     prod?.product_images?.[0];
 
                   return (
                     <div
                       key={it.key}
-                      className="group flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-3 transition-all hover:border-border/80 hover:bg-secondary/40"
+                      className={cn(
+                        "group flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 transition-all",
+                        it.is_custom
+                          ? "border-amber-500/40 bg-amber-500/5 hover:border-amber-500/70 hover:bg-amber-500/10"
+                          : "border-border bg-card hover:border-border/80 hover:bg-secondary/40",
+                      )}
                     >
                       {/* Miniatura & Datos */}
                       <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <span className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-secondary">
-                          {img ? (
-                            <StoredImage image={img} alt="" className="h-full w-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setViewerItem(it)}
+                          className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-secondary hover:ring-2 hover:ring-primary transition-all"
+                          title="Ver imagen / diseño ampliado"
+                        >
+                          {customPrimary?.previewUrl ? (
+                            <img
+                              src={customPrimary.previewUrl}
+                              alt=""
+                              className="h-full w-full object-contain p-0.5"
+                            />
+                          ) : customPrimary?.storage_path ? (
+                            <StoredImage
+                              image={customPrimary}
+                              alt=""
+                              className="h-full w-full object-contain p-0.5"
+                            />
+                          ) : catalogImg ? (
+                            <StoredImage
+                              image={catalogImg}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
                           ) : (
-                            <Package className="h-5 w-5 text-muted-foreground opacity-50" />
+                            <Package className="h-5 w-5 text-muted-foreground/50" />
                           )}
-                        </span>
+
+                          {it.custom_images.length > 0 && (
+                            <span className="absolute bottom-0.5 right-0.5 rounded bg-black/80 px-1 text-[9px] font-bold text-white">
+                              📷 {it.custom_images.length}
+                            </span>
+                          )}
+                        </button>
 
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
                             {it.product_sku && (
                               <span className="font-mono text-xs font-bold text-primary">
                                 {it.product_sku}
@@ -1113,78 +1246,94 @@ function NuevoPedido() {
                             <span
                               className="chip text-[10px] py-0 px-1.5"
                               style={{
-                                color: `var(--${CATEGORY_META[it.category].token})`,
-                                background: `color-mix(in oklab, var(--${CATEGORY_META[it.category].token}) 16%, transparent)`,
+                                color: `var(--${CATEGORY_META[it.category]?.token ?? "primary"})`,
+                                background: `color-mix(in oklab, var(--${CATEGORY_META[it.category]?.token ?? "primary"}) 16%, transparent)`,
                               }}
                             >
-                              {CATEGORY_META[it.category].label}
+                              {CATEGORY_META[it.category]?.label ?? it.category}
                             </span>
+
+                            {it.is_custom && (
+                              <span className="chip text-[10px] py-0 px-1.5 bg-amber-500/20 text-amber-400 font-bold flex items-center gap-1">
+                                <Sparkles className="h-2.5 w-2.5" /> PERSONALIZADO
+                              </span>
+                            )}
                           </div>
 
-                          <p className="truncate text-sm font-semibold text-foreground">
+                          <p className="truncate text-sm font-semibold text-foreground mt-0.5">
                             {it.product_name}
                           </p>
 
-                          {/* Especificaciones de Cortador o Notas */}
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                            {it.category === "CORTADORES" && (
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                            {it.category === "CORTADORES" && it.cutter_size_cm && (
                               <span>
-                                {MODALITIES.find((m) => m.value === it.cutter_modality)?.label ?? "Cortador"} · {it.cutter_size_cm ?? 8} cm
+                                {it.cutter_size_cm} cm ·{" "}
+                                {MODALITIES.find((m) => m.value === it.cutter_modality)?.label ?? ""}
                               </span>
                             )}
-                            {it.notes && (
-                              <span className="chip bg-secondary text-[10px] py-0 text-foreground">
-                                Nota: {it.notes}
-                              </span>
-                            )}
+                            <span>
+                              <strong className="text-foreground font-bold">{it.quantity}</strong> ×{" "}
+                              {money(price)} ={" "}
+                              <strong className="text-foreground font-bold">
+                                {money(itemSubtotal)}
+                              </strong>
+                            </span>
                           </div>
+
+                          {it.notes && (
+                            <p className="mt-1 text-xs text-amber-400/90 italic line-clamp-1">
+                              📝 {it.notes}
+                            </p>
+                          )}
                         </div>
                       </div>
 
-                      {/* Desglose Cantidad × Precio = Subtotal */}
-                      <div className="flex items-center gap-4 shrink-0">
-                        <div className="text-right">
-                          <p className="text-xs text-muted-foreground">
-                            <span className="font-bold text-foreground">{it.quantity}</span> × {money(price)}
-                          </p>
-                          <p className="font-display text-sm font-bold text-primary">
-                            {money(itemSubtotal)}
-                          </p>
-                        </div>
+                      {/* Botones de acción rápida */}
+                      <div className="flex items-center gap-1.5">
+                        {/* Botón Ver diseño */}
+                        {(it.custom_images.length > 0 || it.is_custom || catalogImg) && (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="tap h-8 px-2.5 text-xs font-semibold"
+                            onClick={() => setViewerItem(it)}
+                          >
+                            <Eye className="mr-1 h-3.5 w-3.5 text-primary" />
+                            Ver diseño
+                          </Button>
+                        )}
 
-                        {/* Botones de acción: Editar, Duplicar, Eliminar */}
-                        <div className="flex items-center gap-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="tap h-8 w-8 text-muted-foreground hover:text-foreground"
-                            onClick={() => openEditModal(it)}
-                            title="Editar artículo"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="tap h-8 w-8 text-muted-foreground hover:text-foreground"
-                            onClick={() => handleDuplicateItem(it)}
-                            title="Duplicar artículo"
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="tap h-8 w-8 text-destructive hover:bg-destructive/10"
-                            onClick={() => handleRemoveItem(idx)}
-                            title="Eliminar artículo"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="tap h-8 w-8 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                          onClick={() => duplicateItem(it.key)}
+                          title="Duplicar artículo"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="tap h-8 w-8 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                          onClick={() => startEditItem(it)}
+                          title="Editar artículo"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="tap h-8 w-8 text-destructive hover:bg-destructive/10"
+                          onClick={() => removeItem(it.key)}
+                          title="Eliminar artículo"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                   );
@@ -1194,9 +1343,10 @@ function NuevoPedido() {
           </section>
 
           {/* 4. SECCIÓN ENTREGA */}
-          <section className="panel p-4 sm:p-5">
-            <h2 className="mb-3 font-display text-lg">4. Entrega</h2>
-            <div className="mb-3 flex gap-2">
+          <section className="panel p-4 sm:p-5 space-y-4">
+            <h2 className="font-display text-lg">4. Entrega</h2>
+
+            <div className="flex gap-2">
               {(["envio", "entrega_personal"] as DeliveryType[]).map((d) => (
                 <button
                   key={d}
@@ -1398,50 +1548,42 @@ function NuevoPedido() {
                 className="text-xs"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Observaciones generales..."
               />
             </div>
           </section>
 
-          {/* Resumen de totales */}
-          <section className="panel p-4 shadow-lg border-primary/20">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-              Resumen de compra
-            </h3>
-
-            <div className="space-y-2 text-sm">
+          {/* Resumen y Guardar */}
+          <section className="panel p-4 space-y-3">
+            <h2 className="font-display text-lg">Resumen final</h2>
+            <div className="space-y-1.5 text-xs">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Productos ({totalUnits} pzas)</span>
+                <span className="text-muted-foreground">Subtotal artículos:</span>
                 <span className="font-semibold">{money(subtotal)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Descuento</span>
-                <span className="text-destructive font-medium">-{money(Number(discount || 0))}</span>
+                <span className="text-muted-foreground">Envío:</span>
+                <span className="font-semibold">{money(shippingCost)}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Envío</span>
-                <span className="font-medium">{money(shippingCost)}</span>
-              </div>
-
-              <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
-                <div>
-                  <span className="font-bold text-foreground">Total</span>
-                  <p className="text-[10px] text-muted-foreground">IVA incluido</p>
+              {discountNum > 0 && (
+                <div className="flex justify-between text-amber-400">
+                  <span>Descuento:</span>
+                  <span className="font-semibold">-{money(discountNum)}</span>
                 </div>
-                <span className="font-display text-2xl font-bold text-primary">
-                  {money(total)}
-                </span>
+              )}
+              <div className="border-t border-border pt-2 flex justify-between text-base font-bold">
+                <span>Total:</span>
+                <span className="font-display text-xl text-primary">{money(total)}</span>
               </div>
             </div>
 
             <Button
+              className="tap w-full font-bold h-11 bg-primary text-primary-foreground shadow-md shadow-primary/20 hover:bg-primary/90"
+              disabled={saving || items.length === 0}
               onClick={save}
-              disabled={saving}
-              className="tap mt-4 w-full h-11 font-bold text-base bg-primary text-primary-foreground shadow-md shadow-primary/20 hover:bg-primary/90"
             >
               {saving ? (
                 <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Guardando pedido...
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando pedido…
                 </>
               ) : (
                 "Guardar pedido"
@@ -1584,7 +1726,7 @@ function NuevoPedido() {
                   onChange={(e) => {
                     const raw = e.target.value;
                     setEditingPriceInput(raw);
-                    const parsed = parseFloat(raw.replace(',', '.')) || 0;
+                    const parsed = parseFloat(raw.replace(",", ".")) || 0;
                     setEditingItem({
                       ...editingItem,
                       price_overridden: true,
@@ -1594,16 +1736,21 @@ function NuevoPedido() {
                 />
               </div>
 
-              {/* Notas del artículo */}
-              <div className="space-y-1">
-                <Label className="text-xs">Notas del artículo</Label>
-                <Textarea
-                  rows={2}
-                  className="text-sm"
-                  value={editingItem.notes}
-                  onChange={(e) => setEditingItem({ ...editingItem, notes: e.target.value })}
-                />
-              </div>
+              {/* Gestión de diseño personalizado dentro del modal de edición */}
+              <CustomItemDesignSection
+                isCustom={editingItem.is_custom}
+                onIsCustomChange={(isCustom) =>
+                  setEditingItem({ ...editingItem, is_custom: isCustom })
+                }
+                images={editingItem.custom_images}
+                onImagesChange={(custom_images) =>
+                  setEditingItem({ ...editingItem, custom_images })
+                }
+                customNotes={editingItem.notes}
+                onCustomNotesChange={(notes) =>
+                  setEditingItem({ ...editingItem, notes })
+                }
+              />
 
               <div className="rounded-lg bg-secondary/50 p-2.5 text-right text-xs">
                 <span className="text-muted-foreground">Nuevo subtotal: </span>
@@ -1629,6 +1776,22 @@ function NuevoPedido() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* MODAL 1-TAP PARA VER DISEÑO / IMÁGENES */}
+      <CustomDesignViewerModal
+        open={!!viewerItem}
+        onOpenChange={(open) => !open && setViewerItem(null)}
+        title={viewerItem?.product_name ?? "Artículo"}
+        productSku={viewerItem?.product_sku}
+        isCustom={viewerItem?.is_custom}
+        customNotes={viewerItem?.notes}
+        customImages={viewerItem?.custom_images ?? []}
+        catalogImages={
+          viewerItem?.product_id
+            ? products.find((p) => p.id === viewerItem.product_id)?.product_images ?? []
+            : []
+        }
+      />
 
       {/* DIÁLOGO DE ÉXITO POSTERIOR AL GUARDADO CON ACCIÓN DE RESUMEN */}
       <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
