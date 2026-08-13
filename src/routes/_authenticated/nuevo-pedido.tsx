@@ -653,14 +653,10 @@ function NuevoPedido() {
               null
             : null,
         })),
+        subtotal,
         shipping_cost: shippingCost,
         discount: discountNum,
         total,
-        advance_payment: 0,
-        due_date: dueDate || null,
-        personal_delivery_place: deliveryType === "entrega_personal" ? delivery.place : undefined,
-        personal_delivery_time:
-          deliveryType === "entrega_personal" ? delivery.delivery_time : undefined,
       };
 
       setCreatedOrderId(order.id);
