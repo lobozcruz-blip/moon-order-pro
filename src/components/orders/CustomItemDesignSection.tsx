@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 
 export type CustomImageDraft = {
   id: string;
-  file?: File;
+  file?: File | undefined;
   previewUrl: string;
   storage_path?: string;
   is_primary: boolean;
@@ -54,7 +54,7 @@ export function CustomItemDesignSection({
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      if (!file.type.startsWith("image/")) continue;
+      if (!file || !file.type.startsWith("image/")) continue;
 
       const url = URL.createObjectURL(file);
       newImgs.push({
@@ -74,7 +74,7 @@ export function CustomItemDesignSection({
     const remaining = images.filter((img) => img.id !== id);
     // Si eliminamos la principal y quedan imágenes, asignar la primera como principal
     if (remaining.length > 0 && !remaining.some((img) => img.is_primary)) {
-      remaining[0].is_primary = true;
+      remaining[0]!.is_primary = true;
     }
     onImagesChange(remaining);
   };

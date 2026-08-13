@@ -537,10 +537,11 @@ function NuevoPedido() {
       for (let idx = 0; idx < items.length; idx++) {
         const it = items[idx];
         const createdItem = createdItems?.[idx];
-        if (!createdItem || it.custom_images.length === 0) continue;
+        if (!it || !createdItem || it.custom_images.length === 0) continue;
 
         for (let imgIdx = 0; imgIdx < it.custom_images.length; imgIdx++) {
           const customImg = it.custom_images[imgIdx];
+          if (!customImg) continue;
           let storagePath = customImg.storage_path;
 
           if (customImg.file) {
