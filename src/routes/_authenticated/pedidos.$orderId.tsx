@@ -194,8 +194,7 @@ function DetallePedido() {
   const [itemToDelete, setItemToDelete] = useState<any | null>(null);
 
   const refresh = async () => {
-    await supabase.rpc("recalc_order", { _order_id: orderId });
-    invalidate("order", "orders", "activity");
+    invalidate("order", "orders", "activity", "production-queue", "dashboard-sales-summary", "sales-analytics");
   };
 
   const computedDraftPrice = (draft: typeof addDraft) => {
@@ -469,12 +468,9 @@ function DetallePedido() {
         .update({ shipping_cost: patch.shipping_cost })
         .eq("order_id", orderId);
     }
-    if (patch.shipping_cost !== undefined || patch.discount !== undefined) {
-      await supabase.rpc("recalc_order", { _order_id: orderId });
-    }
     await logActivity({ action: label, entity: "order", order_id: orderId });
     toast.success(label);
-    refresh();
+    await refresh();
   };
 
   const updateShippingCost = async (newCost: number) => {
