@@ -193,9 +193,32 @@ function DetallePedido() {
   // Estado para ELIMINAR artículo
   const [itemToDelete, setItemToDelete] = useState<any | null>(null);
 
+  if (isLoading) return <p className="py-16 text-center text-sm text-muted-foreground">Cargando…</p>;
+  if (!order) return <p className="py-16 text-center text-sm text-muted-foreground">Pedido no encontrado.</p>;
+
   const refresh = async () => {
     invalidate("order", "orders", "activity", "production-queue", "dashboard-sales-summary", "sales-analytics");
   };
+
+  const items = order.order_items ?? [];
+  const totalUnits = items.reduce((a, i) => a + (Number(i.quantity) || 0), 0);
+  const doneUnits = items.reduce((a, i) => a + (i.is_done ? (Number(i.quantity) || 0) : (Number(i.done_quantity) || 0)), 0);
+  const pct = totalUnits ? Math.round((doneUnits / totalUnits) * 100) : 0;
+  const wa = whatsappLink(order.customers?.phone);
+
+  const ship = Array.isArray(order.shipping_details) ? order.shipping_details[0] : order.shipping_details;
+  const pers = Array.isArray(order.personal_delivery_details) ? order.personal_delivery_details[0] : order.personal_delivery_details;
+
+  // Cálculo matemático oficial garantizado (Subtotal, Total, Pagado, Saldo)
+  const computedSubtotal = items.reduce(
+    (acc, it) => acc + (Number(it.subtotal) || ((Number(it.unit_price) || 0) * (Number(it.quantity) || 1))),
+    0,
+  );
+  const computedDiscount = Number(order.discount || 0);
+  const computedShipping = Number(order.shipping_cost || 0);
+  const computedTotal = Math.max(0, computedSubtotal - computedDiscount + computedShipping);
+  const computedPaid = (order.payments ?? []).reduce((acc, p) => acc + Number(p.amount || 0), 0) || Number(order.paid_amount || 0);
+  const computedBalance = Math.max(0, computedTotal - computedPaid);
 
   const computedDraftPrice = (draft: typeof addDraft) => {
     if (draft.price_overridden) return draft.unit_price;
@@ -265,7 +288,7 @@ function DetallePedido() {
       subtotal,
       price_overridden: addDraft.price_overridden,
       notes: addDraft.notes.trim() || null,
-      sort_order: (order?.order_items ?? []).length,
+      sort_order: (order.order_items ?? []).length,
     });
 
     if (error) {
@@ -406,58 +429,6 @@ function DetallePedido() {
     setItemToDelete(null);
     await refresh();
   };
-
-  if (isLoading) return <p className="py-16 text-center text-sm text-muted-foreground">Cargando…</p>;
-  if (!order) return <p className="py-16 text-center text-sm text-muted-foreground">Pedido no encontrado.</p>;
-
-  const items = order.order_items ?? [];
-  const totalUnits = items.reduce((a, i) => a + (Number(i.quantity) || 0), 0);
-  const doneUnits = items.reduce((a, i) => a + (i.is_done ? (Number(i.quantity) || 0) : (Number(i.done_quantity) || 0)), 0);
-  const pct = totalUnits ? Math.round((doneUnits / totalUnits) * 100) : 0;
-  const wa = whatsappLink(order.customers?.phone);
-
-  const ship = Array.isArray(order.shipping_details) ? order.shipping_details[0] : order.shipping_details;
-  const pers = Array.isArray(order.personal_delivery_details) ? order.personal_delivery_details[0] : order.personal_delivery_details;
-
-  // Cálculo matemático oficial garantizado (Subtotal, Total, Pagado, Saldo)
-  const computedSubtotal = items.reduce(
-    (acc, it) => acc + (Number(it.subtotal) || ((Number(it.unit_price) || 0) * (Number(it.quantity) || 1))),
-    0,
-  );
-  const computedDiscount = Number(order.discount || 0);
-  const computedShipping = Number(order.shipping_cost || 0);
-  const computedTotal = Math.max(0, computedSubtotal - computedDiscount + computedShipping);
-  const computedPaid = (order.payments ?? []).reduce((acc, p) => acc + Number(p.amount || 0), 0) || Number(order.paid_amount || 0);
-  const computedBalance = Math.max(0, computedTotal - computedPaid);
-
-  // Auto-reparación en segundo plano si la base de datos tenía valores antiguos desfasados
-  useEffect(() => {
-    if (!order) return;
-    const diffSubtotal = Number(order.subtotal || 0) !== computedSubtotal;
-    const diffTotal = Number(order.total || 0) !== computedTotal;
-    const diffPaid = Number(order.paid_amount || 0) !== computedPaid;
-    const diffBalance = Number(order.balance || 0) !== computedBalance;
-
-    if (diffSubtotal || diffTotal || diffPaid || diffBalance) {
-      console.log(
-        `[Auto-heal] Sincronizando totales de orden ${order.folio || orderId}: subtotal=${order.subtotal}->${computedSubtotal}, total=${order.total}->${computedTotal}, saldo=${order.balance}->${computedBalance}`,
-      );
-      supabase
-        .from("orders")
-        .update({
-          subtotal: computedSubtotal,
-          total: computedTotal,
-          paid_amount: computedPaid,
-          balance: computedBalance,
-        })
-        .eq("id", orderId)
-        .then(({ error }) => {
-          if (!error) {
-            invalidate("orders", "sales-analytics", "dashboard-sales-summary");
-          }
-        });
-    }
-  }, [orderId, computedSubtotal, computedDiscount, computedShipping, computedTotal, computedPaid, computedBalance]);
 
   const summaryData: SummaryOrderData = buildCustomerOrderSummary({
     ...order,
