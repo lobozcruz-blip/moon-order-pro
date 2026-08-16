@@ -226,6 +226,10 @@ function Pedidos() {
           {rows.map((o) => {
             const stMeta = STATUS_META[o.status] ?? STATUS_META.en_espera;
             const payMeta = (o.payment_status && PAYMENT_META[o.payment_status]) ? PAYMENT_META[o.payment_status] : PAYMENT_META.sin_pago;
+            const itemSub = Number(o.subtotal || 0);
+            const disc = Number(o.discount || 0);
+            const ship = Number(o.shipping_cost || 0);
+            const displayTotal = itemSub > 0 || ship > 0 ? Math.max(0, itemSub - disc + ship) : Number(o.total || 0);
             return (
               <Link
                 key={o.id}
@@ -250,7 +254,7 @@ function Pedidos() {
                   {payMeta.label}
                 </span>
                 <span className="text-xs text-muted-foreground">{dateFmt(o.due_date)}</span>
-                <span className="w-24 text-right text-sm font-semibold">{money(o.total)}</span>
+                <span className="w-24 text-right text-sm font-semibold">{money(displayTotal)}</span>
               </Link>
             );
           })}
@@ -288,15 +292,19 @@ function Column({
           style={{ background: `var(--${meta.token})` }}
           aria-hidden
         />
-        <h3 className="text-sm font-semibold">{meta.label}</h3>
-        <span className="ml-auto text-xs text-muted-foreground">{orders.length}</span>
+        <h3 className="font-display text-sm font-semibold">{meta.label}</h3>
+        <span className="ml-auto rounded-full bg-secondary px-2 py-0.5 text-xs font-bold text-muted-foreground">
+          {orders.length}
+        </span>
       </div>
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2">
         {orders.map((o) => (
           <OrderCard key={o.id} order={o} onMove={onMove} draggable />
         ))}
         {orders.length === 0 && (
-          <p className="py-6 text-center text-xs text-muted-foreground">Vacío</p>
+          <div className="rounded-xl border border-dashed border-border py-8 text-center text-xs text-muted-foreground">
+            Sin pedidos
+          </div>
         )}
       </div>
     </div>
@@ -321,6 +329,11 @@ function OrderCard({
   const today = new Date().toISOString().slice(0, 10);
   const late = order.due_date && order.due_date < today && order.status !== "finalizado";
   const payMeta = (order.payment_status && PAYMENT_META[order.payment_status]) ? PAYMENT_META[order.payment_status] : PAYMENT_META.sin_pago;
+
+  const itemSub = Number(order.subtotal || 0);
+  const disc = Number(order.discount || 0);
+  const ship = Number(order.shipping_cost || 0);
+  const displayTotal = itemSub > 0 || ship > 0 ? Math.max(0, itemSub - disc + ship) : Number(order.total || 0);
 
   return (
     <div
@@ -348,7 +361,7 @@ function OrderCard({
             {fullName(order.customers?.first_name, order.customers?.last_name)}
           </p>
           <p className="text-xs text-muted-foreground">
-            {order.order_items?.length ?? 0} artículos · {money(order.total)}
+            {order.order_items?.length ?? 0} artículos · {money(displayTotal)}
           </p>
         </Link>
       </div>

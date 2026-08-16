@@ -166,24 +166,22 @@ export function buildCustomerOrderSummary(order: any): SummaryOrderData {
   });
 
   const itemsSubtotal = summaryItems.reduce((acc, i) => acc + i.subtotal, 0);
-  const subtotal = Number(order.subtotal ?? itemsSubtotal);
+  const subtotal = Number(order.subtotal ?? itemsSubtotal) || itemsSubtotal;
   const discount = Number(order.discount ?? 0);
   const shippingCost = Number(
     order.shipping_cost ?? order.shipping_details?.shipping_cost ?? 0,
   );
-  const expectedTotal = Math.max(0, subtotal - discount + shippingCost);
-  const total = Number(order.total ?? expectedTotal);
+  const total = Math.max(0, subtotal - discount + shippingCost);
 
-  if (order.total !== undefined && order.total !== null && Number(order.total) !== expectedTotal) {
+  if (order.total !== undefined && order.total !== null && Number(order.total) !== total) {
     console.warn(
-      `[order-summary] Inconsistencia en total de pedido ${order.folio || order.id}: DB=${order.total}, Calculado=${expectedTotal}`,
+      `[order-summary] Inconsistencia en total de pedido ${order.folio || order.id}: DB=${order.total}, Calculado=${total}`,
     );
   }
 
   const paymentsSum = order.payments?.reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0) ?? 0;
   const totalPaid = Number(order.total_paid ?? order.paid_amount ?? paymentsSum);
-  const expectedBalance = Math.max(0, total - totalPaid);
-  const balance = Number(order.balance ?? expectedBalance);
+  const balance = Math.max(0, total - totalPaid);
 
   const cust = order.customers || order.customer;
   const customerName =

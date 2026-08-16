@@ -279,6 +279,15 @@ function DetallePedido() {
       order_id: orderId,
     });
 
+    const newItemsSubtotal = computedSubtotal + subtotal;
+    const newTotal = Math.max(0, newItemsSubtotal - computedDiscount + computedShipping);
+    const newBalance = Math.max(0, newTotal - computedPaid);
+    await supabase.from("orders").update({
+      subtotal: newItemsSubtotal,
+      total: newTotal,
+      balance: newBalance,
+    }).eq("id", orderId);
+
     toast.success(`"${addDraft.product_name}" añadido al pedido`);
     setIsAddOpen(false);
     setAddDraft({
@@ -355,6 +364,16 @@ function DetallePedido() {
       order_id: orderId,
     });
 
+    const newItems = items.map((i: any) => i.id === editingItem.id ? { ...i, subtotal } : i);
+    const newItemsSubtotal = newItems.reduce((acc: number, it: any) => acc + (Number(it.subtotal) || 0), 0);
+    const newTotal = Math.max(0, newItemsSubtotal - computedDiscount + computedShipping);
+    const newBalance = Math.max(0, newTotal - computedPaid);
+    await supabase.from("orders").update({
+      subtotal: newItemsSubtotal,
+      total: newTotal,
+      balance: newBalance,
+    }).eq("id", orderId);
+
     toast.success("Artículo actualizado");
     setIsEditOpen(false);
     setEditingItem(null);
@@ -373,6 +392,16 @@ function DetallePedido() {
       entity: "order_item",
       order_id: orderId,
     });
+    const remainingItems = items.filter((i: any) => i.id !== itemToDelete.id);
+    const newItemsSubtotal = remainingItems.reduce((acc: number, it: any) => acc + (Number(it.subtotal) || 0), 0);
+    const newTotal = Math.max(0, newItemsSubtotal - computedDiscount + computedShipping);
+    const newBalance = Math.max(0, newTotal - computedPaid);
+    await supabase.from("orders").update({
+      subtotal: newItemsSubtotal,
+      total: newTotal,
+      balance: newBalance,
+    }).eq("id", orderId);
+
     toast.success(`"${itemToDelete.product_name}" eliminado del pedido`);
     setItemToDelete(null);
     await refresh();
@@ -390,7 +419,56 @@ function DetallePedido() {
   const ship = Array.isArray(order.shipping_details) ? order.shipping_details[0] : order.shipping_details;
   const pers = Array.isArray(order.personal_delivery_details) ? order.personal_delivery_details[0] : order.personal_delivery_details;
 
-  const summaryData: SummaryOrderData = buildCustomerOrderSummary(order);
+  // Cálculo matemático oficial garantizado (Subtotal, Total, Pagado, Saldo)
+  const computedSubtotal = items.reduce(
+    (acc, it) => acc + (Number(it.subtotal) || ((Number(it.unit_price) || 0) * (Number(it.quantity) || 1))),
+    0,
+  );
+  const computedDiscount = Number(order.discount || 0);
+  const computedShipping = Number(order.shipping_cost || 0);
+  const computedTotal = Math.max(0, computedSubtotal - computedDiscount + computedShipping);
+  const computedPaid = (order.payments ?? []).reduce((acc, p) => acc + Number(p.amount || 0), 0) || Number(order.paid_amount || 0);
+  const computedBalance = Math.max(0, computedTotal - computedPaid);
+
+  // Auto-reparación en segundo plano si la base de datos tenía valores antiguos desfasados
+  useEffect(() => {
+    if (!order) return;
+    const diffSubtotal = Number(order.subtotal || 0) !== computedSubtotal;
+    const diffTotal = Number(order.total || 0) !== computedTotal;
+    const diffPaid = Number(order.paid_amount || 0) !== computedPaid;
+    const diffBalance = Number(order.balance || 0) !== computedBalance;
+
+    if (diffSubtotal || diffTotal || diffPaid || diffBalance) {
+      console.log(
+        `[Auto-heal] Sincronizando totales de orden ${order.folio || orderId}: subtotal=${order.subtotal}->${computedSubtotal}, total=${order.total}->${computedTotal}, saldo=${order.balance}->${computedBalance}`,
+      );
+      supabase
+        .from("orders")
+        .update({
+          subtotal: computedSubtotal,
+          total: computedTotal,
+          paid_amount: computedPaid,
+          balance: computedBalance,
+        })
+        .eq("id", orderId)
+        .then(({ error }) => {
+          if (!error) {
+            invalidate("orders", "sales-analytics", "dashboard-sales-summary");
+          }
+        });
+    }
+  }, [orderId, computedSubtotal, computedDiscount, computedShipping, computedTotal, computedPaid, computedBalance]);
+
+  const summaryData: SummaryOrderData = buildCustomerOrderSummary({
+    ...order,
+    subtotal: computedSubtotal,
+    discount: computedDiscount,
+    shipping_cost: computedShipping,
+    total: computedTotal,
+    paid_amount: computedPaid,
+    total_paid: computedPaid,
+    balance: computedBalance,
+  });
 
   const printSheetData: OrderPrintSheetData = {
     id: order.id,
@@ -419,14 +497,14 @@ function DetallePedido() {
       references_text: ship?.references_text ?? null,
       carrier: ship?.carrier ?? null,
       tracking_number: ship?.tracking_number ?? null,
-      shipping_cost: Number(ship?.shipping_cost || order.shipping_cost || 0),
+      shipping_cost: computedShipping,
       special_instructions: ship?.special_instructions ?? null,
       place: pers?.place ?? null,
       delivery_date: pers?.delivery_date ?? null,
       delivery_time: pers?.delivery_time ?? null,
       instructions: pers?.instructions ?? null,
     },
-    items: (order.order_items ?? []).map((it: any) => ({
+    items: items.map((it: any) => ({
       id: it.id,
       name: it.product_name,
       sku: it.product_sku || it.products?.sku || null,
@@ -439,12 +517,12 @@ function DetallePedido() {
       notes: it.notes,
       is_done: it.is_done,
     })),
-    subtotal: Number(order.subtotal || 0),
-    discount: Number(order.discount || 0),
-    shipping_cost: Number(order.shipping_cost || 0),
-    total: Number(order.total || 0),
-    paid_amount: Number(order.paid_amount || 0),
-    balance: Number(order.balance ?? (order.total - (order.paid_amount || 0))),
+    subtotal: computedSubtotal,
+    discount: computedDiscount,
+    shipping_cost: computedShipping,
+    total: computedTotal,
+    paid_amount: computedPaid,
+    balance: computedBalance,
     payments: (order.payments ?? []).map((p: any) => ({
       id: p.id,
       amount: Number(p.amount || 0),
@@ -457,7 +535,22 @@ function DetallePedido() {
   type OrderPatch = Database["public"]["Tables"]["orders"]["Update"];
 
   const patchOrder = async (patch: OrderPatch, label: string) => {
-    const { error } = await supabase.from("orders").update(patch).eq("id", orderId);
+    const nextShipping = patch.shipping_cost !== undefined ? Number(patch.shipping_cost) : computedShipping;
+    const nextDiscount = patch.discount !== undefined ? Number(patch.discount) : computedDiscount;
+    const nextSubtotal = patch.subtotal !== undefined ? Number(patch.subtotal) : computedSubtotal;
+    const nextTotal = Math.max(0, nextSubtotal - nextDiscount + nextShipping);
+    const nextPaid = computedPaid;
+    const nextBalance = Math.max(0, nextTotal - nextPaid);
+
+    const fullPatch: OrderPatch = {
+      ...patch,
+      subtotal: nextSubtotal,
+      total: nextTotal,
+      paid_amount: nextPaid,
+      balance: nextBalance,
+    };
+
+    const { error } = await supabase.from("orders").update(fullPatch).eq("id", orderId);
     if (error) {
       toast.error(error.message);
       return;
@@ -810,17 +903,17 @@ function DetallePedido() {
           <section className="panel p-4">
             <h2 className="mb-3 font-display text-lg">Resumen</h2>
             <div className="space-y-1 text-sm">
-              <Row label="Artículos" value={money(order.subtotal)} />
-              <Row label="Descuento" value={`-${money(order.discount)}`} />
-              <Row label="Envío" value={money(order.shipping_cost)} />
+              <Row label="Artículos" value={money(computedSubtotal)} />
+              <Row label="Descuento" value={`-${money(computedDiscount)}`} />
+              <Row label="Envío" value={money(computedShipping)} />
               <div className="flex justify-between border-t border-border pt-1 font-semibold">
                 <span>Total</span>
-                <span>{money(order.total)}</span>
+                <span>{money(computedTotal)}</span>
               </div>
-              <Row label="Pagado" value={money(order.paid_amount)} />
+              <Row label="Pagado" value={money(computedPaid)} />
               <div className="flex justify-between font-bold" style={{ color: "var(--st-espera)" }}>
                 <span>Saldo</span>
-                <span>{money(order.balance)}</span>
+                <span>{money(computedBalance)}</span>
               </div>
             </div>
           </section>
@@ -1529,6 +1622,15 @@ function Pagos({ order, onChange }: { order: OrderData; onChange: () => void }) 
         detail: `${money(value)} · ${method}`,
       });
       toast.success("Pago registrado");
+      const newPaid = currentPaid + value;
+      const newBalance = Math.max(0, calculatedTotal - newPaid);
+      const newPaymentStatus = newPaid >= calculatedTotal ? "pagado" : "pago_parcial";
+      await supabase.from("orders").update({
+        paid_amount: newPaid,
+        balance: newBalance,
+        payment_status: newPaymentStatus,
+      }).eq("id", order.id);
+
       setAmount("");
       setReference("");
       setNotes("");
@@ -1541,8 +1643,16 @@ function Pagos({ order, onChange }: { order: OrderData; onChange: () => void }) 
     }
   };
 
-  const currentBalance = Math.max(0, Number(order.balance ?? (order.total - (order.paid_amount || 0))));
-  const halfDeposit = Number((Number(order.total || 0) / 2).toFixed(2));
+  const itemsSubtotal = (order.order_items ?? []).reduce(
+    (acc: number, it: any) => acc + (Number(it.subtotal) || ((Number(it.unit_price) || 0) * (Number(it.quantity) || 1))),
+    0,
+  );
+  const currentDiscount = Number(order.discount || 0);
+  const currentShipping = Number(order.shipping_cost || 0);
+  const calculatedTotal = Math.max(0, itemsSubtotal - currentDiscount + currentShipping);
+  const currentPaid = (order.payments ?? []).reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0) || Number(order.paid_amount || 0);
+  const currentBalance = Math.max(0, calculatedTotal - currentPaid);
+  const halfDeposit = Number((calculatedTotal / 2).toFixed(2));
 
   return (
     <div className="space-y-4">
