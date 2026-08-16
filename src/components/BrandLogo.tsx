@@ -27,6 +27,7 @@ export function BrandLogo({
         <img
           src={logoUrl}
           alt={brandName}
+          crossOrigin="anonymous"
           className={cn(s.img, "w-auto object-contain")}
           style={{ maxHeight: "inherit" }}
         />

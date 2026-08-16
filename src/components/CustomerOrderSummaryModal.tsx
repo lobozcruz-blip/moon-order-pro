@@ -33,6 +33,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useBrand, useBrandName } from "@/lib/brand";
 import { signedUrl } from "@/lib/storage";
+import { supabase } from "@/integrations/supabase/client";
 import { money, dateFmt, fullName, type Modality, MODALITIES } from "@/lib/cm";
 import { cn } from "@/lib/utils";
 import type { SummaryOrderData, SummaryItem } from "@/lib/order-summary";
@@ -49,7 +50,7 @@ const ITEMS_PER_PAGE = 7;
 
 /**
  * Espera de forma robusta a que todas las imágenes dentro de un contenedor HTML hayan cargado y decodificado
- * antes de generar la captura PNG.
+ * antes de generar la captura PNG. Cuenta con timeout de seguridad para no bloquearse nunca.
  */
 async function waitForImages(container: HTMLElement): Promise<void> {
   const images = Array.from(container.querySelectorAll("img"));
@@ -61,6 +62,7 @@ async function waitForImages(container: HTMLElement): Promise<void> {
         await new Promise((resolve) => {
           img.onload = resolve;
           img.onerror = resolve;
+          setTimeout(resolve, 1500);
         });
       }
       try {
@@ -91,7 +93,7 @@ export function CustomerOrderSummaryModal({
   const [imagesLoading, setImagesLoading] = useState(false);
   const [activePreviewPage, setActivePreviewPage] = useState(0);
 
-  // URLs firmadas para imágenes de productos keyed por item.id
+  // URLs firmadas o base64 para imágenes de productos keyed por item.id
   const [itemImageUrls, setItemImageUrls] = useState<Record<string, string>>({});
 
   const pagesContainerRef = useRef<HTMLDivElement>(null);
@@ -99,7 +101,7 @@ export function CustomerOrderSummaryModal({
   // Soporte Web Share API
   const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
 
-  // Cargar imágenes firmadas para los artículos (personalizados + catálogo según opción)
+  // Cargar imágenes de los artículos (convirtiendo a Data URL base64 para máxima compatibilidad con html-to-image)
   useEffect(() => {
     if (!order?.items || order.items.length === 0) {
       setItemImageUrls({});
@@ -118,17 +120,36 @@ export function CustomerOrderSummaryModal({
 
         if (!shouldResolve) continue;
 
-        if (item.image_url) {
-          urls[key] = item.image_url;
-        } else if (item.image_path) {
+        if (item.image_path) {
+          try {
+            // Intentar descarga directa de blob para base64 libre de CORS y sin expiración de query params
+            const { data: blobData } = await supabase.storage.from("cookies-moon").download(item.image_path);
+            if (blobData) {
+              const base64 = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.onerror = () => resolve("");
+                reader.readAsDataURL(blobData);
+              });
+              if (base64 && isMounted) {
+                urls[key] = base64;
+                continue;
+              }
+            }
+          } catch (e) {
+            console.warn("Descarga de blob omitida, usando signedUrl:", e);
+          }
+
           try {
             const url = await signedUrl(item.image_path);
             if (url && isMounted) {
               urls[key] = url;
             }
           } catch (e) {
-            console.error(`Error resolving signed URL for item ${item.name} (${item.image_path}):`, e);
+            console.error(`Error resolviendo URL para ${item.name}:`, e);
           }
+        } else if (item.image_url) {
+          urls[key] = item.image_url;
         }
       }
 
@@ -170,7 +191,7 @@ export function CustomerOrderSummaryModal({
     try {
       // 1. Esperar decodificación y carga de imágenes
       await waitForImages(pagesContainerRef.current);
-      await new Promise((resolve) => setTimeout(resolve, 80));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       const pageElements = pagesContainerRef.current.querySelectorAll<HTMLElement>(".summary-export-canvas");
       if (pageElements.length === 0) throw new Error("No se encontró el lienzo para generar la imagen");
@@ -179,13 +200,11 @@ export function CustomerOrderSummaryModal({
         const el = pageElements[i];
         if (!el) continue;
 
-        await new Promise((resolve) => setTimeout(resolve, 60));
-
         const dataUrl = await toPng(el, {
           quality: 0.98,
           pixelRatio: 2,
           backgroundColor: "#FFFFFF",
-          cacheBust: true,
+          cacheBust: false,
         });
 
         const link = document.createElement("a");
@@ -206,6 +225,7 @@ export function CustomerOrderSummaryModal({
           : "Resumen descargado correctamente en PNG",
       );
     } catch (err) {
+      console.error("Error al exportar imagen PNG:", err);
       toast.error(err instanceof Error ? err.message : "Error al generar la imagen");
     } finally {
       setIsGenerating(false);
@@ -214,11 +234,11 @@ export function CustomerOrderSummaryModal({
 
   // Compartir mediante Web Share API
   const handleShare = async () => {
-    if (!pagesContainerRef.current || !canShare) return;
+    if (!pagesContainerRef.current) return;
     setIsGenerating(true);
     try {
       await waitForImages(pagesContainerRef.current);
-      await new Promise((resolve) => setTimeout(resolve, 80));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       const pageElements = pagesContainerRef.current.querySelectorAll<HTMLElement>(".summary-export-canvas");
       if (pageElements.length === 0) throw new Error("No se encontró el lienzo");
@@ -228,16 +248,15 @@ export function CustomerOrderSummaryModal({
         const el = pageElements[i];
         if (!el) continue;
 
-        await new Promise((resolve) => setTimeout(resolve, 60));
-
         const dataUrl = await toPng(el, {
           quality: 0.98,
           pixelRatio: 2,
           backgroundColor: "#FFFFFF",
-          cacheBust: true,
+          cacheBust: false,
         });
 
-        const blob = await (await fetch(dataUrl)).blob();
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
         const filename =
           pageElements.length > 1
             ? `CookiesMoon-${order.folio}-p${i + 1}.png`
@@ -252,12 +271,23 @@ export function CustomerOrderSummaryModal({
           text: `¡Hola ${order.customer_name}! Te compartimos el resumen de tu pedido en Cookies Moon.`,
         });
         toast.success("Resumen compartido");
+      } else if (navigator.clipboard && window.ClipboardItem && files[0]) {
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ "image/png": files[0] }),
+          ]);
+          toast.success("¡Imagen copiada al portapapeles! Puedes pegarla directamente en WhatsApp (Ctrl+V)");
+        } catch {
+          await handleDownload();
+        }
       } else {
-        handleDownload();
+        await handleDownload();
       }
     } catch (err: any) {
+      console.error("Error al compartir:", err);
       if (err.name !== "AbortError") {
-        toast.error("No se pudo compartir. Descarga el PNG directamente.");
+        toast.error("No se pudo compartir directamente. Descargando imagen...");
+        await handleDownload();
       }
     } finally {
       setIsGenerating(false);
@@ -421,7 +451,7 @@ export function CustomerOrderSummaryModal({
           style={{
             position: "fixed",
             left: "-9999px",
-            top: "-9999px",
+            top: "0px",
             width: "560px",
             pointerEvents: "none",
             opacity: 1,
