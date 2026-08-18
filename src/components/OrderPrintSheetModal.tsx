@@ -136,6 +136,132 @@ async function waitForImages(container: HTMLElement): Promise<void> {
   );
 }
 
+/**
+ * Envía a imprimir el elemento HTML exacto en un iframe limpio aislado,
+ * evitando desfases de márgenes, encabezados de modal o espacios en blanco superiores.
+ */
+function printHtmlElement(element: HTMLElement, title: string) {
+  const oldIframe = document.getElementById("order-print-iframe");
+  if (oldIframe) oldIframe.remove();
+
+  const iframe = document.createElement("iframe");
+  iframe.id = "order-print-iframe";
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.style.visibility = "hidden";
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentWindow?.document;
+  if (!doc) {
+    window.print();
+    return;
+  }
+
+  // Copiar todas las etiquetas <style> y <link rel="stylesheet"> del documento principal
+  const headStyles = Array.from(document.querySelectorAll("style, link[rel='stylesheet']"))
+    .map((el) => el.outerHTML)
+    .join("\n");
+
+  doc.open();
+  doc.write(`
+    <!DOCTYPE html>
+    <html lang="es">
+      <head>
+        <title>${title}</title>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        ${headStyles}
+        <style>
+          @page {
+            size: letter portrait;
+            margin: 8mm 10mm;
+          }
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            box-sizing: border-box !important;
+          }
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #FFFFFF !important;
+            color: #111827 !important;
+            width: 100% !important;
+            height: auto !important;
+            overflow: visible !important;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+          }
+          .order-print-sheet-root {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            background: #FFFFFF !important;
+          }
+          table {
+            page-break-inside: auto;
+            width: 100%;
+            border-collapse: collapse;
+          }
+          tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+          }
+          thead {
+            display: table-header-group;
+          }
+          tfoot {
+            display: table-footer-group;
+          }
+          img {
+            max-width: 100%;
+            display: block;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="order-print-sheet-root">
+          ${element.innerHTML}
+        </div>
+      </body>
+    </html>
+  `);
+  doc.close();
+
+  // Esperar a que las imágenes del iframe estén listas antes de imprimir
+  const iframeImages = Array.from(doc.querySelectorAll("img"));
+  const imagePromises = iframeImages.map((img) => {
+    if (img.complete) return Promise.resolve();
+    return new Promise((res) => {
+      img.onload = res;
+      img.onerror = res;
+      setTimeout(res, 1200);
+    });
+  });
+
+  Promise.all(imagePromises).then(() => {
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch (e) {
+        console.error("Error al imprimir desde iframe:", e);
+        window.print();
+      } finally {
+        setTimeout(() => {
+          iframe.remove();
+        }, 2000);
+      }
+    }, 200);
+  });
+}
+
 export function OrderPrintSheetModal({ open, onOpenChange, order }: OrderPrintSheetModalProps) {
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -240,43 +366,16 @@ export function OrderPrintSheetModal({ open, onOpenChange, order }: OrderPrintSh
     }
   };
 
-  // Impresión nativa de hoja tamaño carta
-  const handlePrint = () => {
-    window.print();
+  // Impresión nativa limpia de hoja tamaño carta mediante iframe dedicado
+  const handlePrint = async () => {
+    if (!printRef.current) return;
+    await waitForImages(printRef.current);
+    printHtmlElement(printRef.current, `Pedido-${order.folio}`);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[95vh] sm:max-w-4xl overflow-hidden flex flex-col p-0 gap-0 bg-background border-border">
-        {/* Estilos específicos de impresión */}
-        <style dangerouslySetInnerHTML={{
-          __html: `
-            @media print {
-              body * {
-                visibility: hidden;
-              }
-              .order-print-sheet-root, .order-print-sheet-root * {
-                visibility: visible;
-              }
-              .order-print-sheet-root {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 100% !important;
-                max-width: 100% !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                border: none !important;
-                box-shadow: none !important;
-              }
-              @page {
-                size: letter portrait;
-                margin: 10mm 12mm;
-              }
-            }
-          `
-        }} />
-
         {/* Cabecera del Modal (No se imprime) */}
         <DialogHeader className="p-4 sm:p-5 border-b border-border bg-card/60 shrink-0">
           <div className="flex items-center justify-between">
