@@ -34,14 +34,18 @@ import {
   money,
   dateFmt,
   fullName,
+  getOrderPaymentCategory,
   type OrderStatus,
 } from "@/lib/cm";
 import { logActivity } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
+export type PaymentFilter = "todos" | "sin_pago" | "pago_parcial" | "pagado";
+
 export const Route = createFileRoute("/_authenticated/pedidos/")({
   validateSearch: (s: Record<string, unknown>) => ({
     cliente: typeof s['cliente'] === "string" ? (s['cliente'] as string) : undefined,
+    pago: typeof s['pago'] === "string" ? (s['pago'] as string) : undefined,
   }),
   head: () => ({
     meta: [
@@ -64,7 +68,7 @@ function progressOf(o: Order) {
 }
 
 function Pedidos() {
-  const { cliente } = Route.useSearch();
+  const { cliente, pago } = Route.useSearch();
   const { data: orders, isLoading } = useOrders();
   const { data: profiles } = useProfiles();
   const { data: pending } = usePendingOrders();
@@ -75,8 +79,29 @@ function Pedidos() {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<OrderStatus | "todos">("todos");
   const [assignee, setAssignee] = useState<string>("todos");
+  const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>(
+    (pago as any) && ["sin_pago", "pago_parcial", "pagado"].includes(pago as string)
+      ? (pago as PaymentFilter)
+      : "todos"
+  );
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  const paymentCounts = useMemo(() => {
+    const counts = { todos: 0, sin_pago: 0, pago_parcial: 0, pagado: 0 };
+    for (const o of orders ?? []) {
+      if (cliente && o.customer_id !== cliente) continue;
+      if (status !== "todos" && o.status !== status) continue;
+      if (assignee !== "todos" && o.assignee_id !== assignee) continue;
+
+      counts.todos++;
+      const cat = getOrderPaymentCategory(o);
+      if (cat in counts) {
+        counts[cat]++;
+      }
+    }
+    return counts;
+  }, [orders, cliente, status, assignee]);
 
   const rows = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -85,11 +110,12 @@ function Pedidos() {
         (!cliente || o.customer_id === cliente) &&
         (status === "todos" || o.status === status) &&
         (assignee === "todos" || o.assignee_id === assignee) &&
+        (paymentFilter === "todos" || getOrderPaymentCategory(o) === paymentFilter) &&
         (!t ||
           (o.folio ?? "").toLowerCase().includes(t) ||
           fullName(o.customers?.first_name, o.customers?.last_name).toLowerCase().includes(t)),
     );
-  }, [orders, q, status, assignee, cliente]);
+  }, [orders, q, status, assignee, cliente, paymentFilter]);
 
   const move = async (id: string, next: OrderStatus, prev: OrderStatus) => {
     if (next === prev) return;
@@ -156,16 +182,112 @@ function Pedidos() {
         }
       />
 
-      <div className="mb-4 grid gap-2 sm:grid-cols-3">
-        <div className="relative sm:col-span-1">
+      {/* Pestañas rápidas de estado de pago */}
+      <div className="mb-3 flex flex-wrap items-center gap-1.5 p-1 bg-muted/40 rounded-xl border border-border/60">
+        <button
+          type="button"
+          onClick={() => setPaymentFilter("todos")}
+          className={cn(
+            "tap px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-2",
+            paymentFilter === "todos"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground hover:bg-background/50",
+          )}
+        >
+          <span>Todos los pagos</span>
+          <span className="text-[10px] opacity-75 px-1.5 py-0.2 rounded-full bg-secondary">
+            {paymentCounts.todos}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setPaymentFilter("sin_pago")}
+          className={cn(
+            "tap px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-2",
+            paymentFilter === "sin_pago"
+              ? "bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/30 shadow-sm"
+              : "text-muted-foreground hover:text-foreground hover:bg-background/50",
+          )}
+        >
+          <span className="h-2 w-2 rounded-full bg-rose-500 shrink-0" />
+          <span>Sin pagar</span>
+          <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-rose-500/15 text-rose-700 dark:text-rose-300">
+            {paymentCounts.sin_pago}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setPaymentFilter("pago_parcial")}
+          className={cn(
+            "tap px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-2",
+            paymentFilter === "pago_parcial"
+              ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 shadow-sm"
+              : "text-muted-foreground hover:text-foreground hover:bg-background/50",
+          )}
+        >
+          <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0" />
+          <span>Con adelanto</span>
+          <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
+            {paymentCounts.pago_parcial}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setPaymentFilter("pagado")}
+          className={cn(
+            "tap px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-2",
+            paymentFilter === "pagado"
+              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 shadow-sm"
+              : "text-muted-foreground hover:text-foreground hover:bg-background/50",
+          )}
+        >
+          <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+          <span>Pagados</span>
+          <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+            {paymentCounts.pagado}
+          </span>
+        </button>
+
+        {paymentFilter !== "todos" && (
+          <button
+            type="button"
+            onClick={() => setPaymentFilter("todos")}
+            className="ml-auto text-[11px] text-muted-foreground hover:text-foreground px-2 py-1 underline tap"
+          >
+            Ver todos
+          </button>
+        )}
+      </div>
+
+      <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {/* 1. Buscador */}
+        <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="tap pl-9"
-            placeholder="Folio o cliente"
+            placeholder="Folio o cliente..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
+
+        {/* 2. Filtro de Estado de Pago */}
+        <Select value={paymentFilter} onValueChange={(v) => setPaymentFilter(v as PaymentFilter)}>
+          <SelectTrigger className="tap">
+            <SelectValue placeholder="Estado de pago" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos los pagos ({paymentCounts.todos})</SelectItem>
+            <SelectItem value="sin_pago">Sin pagar ({paymentCounts.sin_pago})</SelectItem>
+            <SelectItem value="pago_parcial">Con adelanto ({paymentCounts.pago_parcial})</SelectItem>
+            <SelectItem value="pagado">Pagados ({paymentCounts.pagado})</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* 3. Filtro de Estado de Producción */}
         <Select value={status} onValueChange={(v) => setStatus(v as OrderStatus | "todos")}>
           <SelectTrigger className="tap">
             <SelectValue />
@@ -179,6 +301,8 @@ function Pedidos() {
             ))}
           </SelectContent>
         </Select>
+
+        {/* 4. Filtro de Responsable */}
         <Select value={assignee} onValueChange={setAssignee}>
           <SelectTrigger className="tap">
             <SelectValue />
@@ -225,7 +349,8 @@ function Pedidos() {
         <div className="panel divide-y divide-border">
           {rows.map((o) => {
             const stMeta = STATUS_META[o.status] ?? STATUS_META.en_espera;
-            const payMeta = (o.payment_status && PAYMENT_META[o.payment_status]) ? PAYMENT_META[o.payment_status] : PAYMENT_META.sin_pago;
+            const payCategory = getOrderPaymentCategory(o);
+            const payMeta = (o.payment_status && PAYMENT_META[o.payment_status]) ? PAYMENT_META[o.payment_status] : PAYMENT_META[payCategory];
             const itemSub = Number(o.subtotal || 0);
             const disc = Number(o.discount || 0);
             const ship = Number(o.shipping_cost || 0);
@@ -250,8 +375,16 @@ function Pedidos() {
                 >
                   {stMeta.label}
                 </span>
-                <span className="chip" style={{ color: `var(--${payMeta.token})` }}>
-                  {payMeta.label}
+                <span
+                  className="chip font-medium"
+                  style={{
+                    color: `var(--${payMeta.token})`,
+                    background: `color-mix(in oklab, var(--${payMeta.token}) 14%, transparent)`,
+                  }}
+                >
+                  {payCategory === "pago_parcial" && o.paid_amount
+                    ? `Adelanto: ${money(o.paid_amount)}`
+                    : payMeta.label}
                 </span>
                 <span className="text-xs text-muted-foreground">{dateFmt(o.due_date)}</span>
                 <span className="w-24 text-right text-sm font-semibold">{money(displayTotal)}</span>
@@ -328,7 +461,8 @@ function OrderCard({
   const priority = PRIORITIES.find((p) => p.value === order.priority)?.label;
   const today = new Date().toISOString().slice(0, 10);
   const late = order.due_date && order.due_date < today && order.status !== "finalizado";
-  const payMeta = (order.payment_status && PAYMENT_META[order.payment_status]) ? PAYMENT_META[order.payment_status] : PAYMENT_META.sin_pago;
+  const payCategory = getOrderPaymentCategory(order);
+  const payMeta = (order.payment_status && PAYMENT_META[order.payment_status]) ? PAYMENT_META[order.payment_status] : PAYMENT_META[payCategory];
 
   const itemSub = Number(order.subtotal || 0);
   const disc = Number(order.discount || 0);
@@ -371,8 +505,16 @@ function OrderCard({
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <span className="chip" style={{ color: `var(--${payMeta.token})` }}>
-          {payMeta.label}
+        <span
+          className="chip font-medium"
+          style={{
+            color: `var(--${payMeta.token})`,
+            background: `color-mix(in oklab, var(--${payMeta.token}) 14%, transparent)`,
+          }}
+        >
+          {payCategory === "pago_parcial" && order.paid_amount
+            ? `Adelanto: ${money(order.paid_amount)}`
+            : payMeta.label}
         </span>
         {priority && order.priority !== "normal" && (
           <span className="chip bg-background text-muted-foreground">{priority}</span>

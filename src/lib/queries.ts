@@ -91,6 +91,94 @@ export function useProducts(includeInactive = true) {
   });
 }
 
+export type ProductOrderMetrics = {
+  total: number;
+  pagados: number;
+  adelanto: number;
+  sinPagar: number;
+};
+
+export function useProductOrderMetrics() {
+  return useQuery({
+    queryKey: ["product-order-metrics"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("order_items")
+        .select(`
+          product_id,
+          quantity,
+          orders (
+            id,
+            status,
+            payment_status,
+            is_draft,
+            total,
+            paid_amount,
+            balance
+          )
+        `)
+        .not("product_id", "is", null);
+
+      if (error) throw error;
+
+      const map: Record<string, ProductOrderMetrics> = {};
+
+      for (const item of data ?? []) {
+        const pid = item.product_id;
+        if (!pid) continue;
+
+        const order = item.orders as any;
+        // Omitir órdenes en borrador o canceladas
+        if (order && (order.is_draft || order.status === "cancelado")) {
+          continue;
+        }
+
+        if (!map[pid]) {
+          map[pid] = { total: 0, pagados: 0, adelanto: 0, sinPagar: 0 };
+        }
+
+        const qty = Number(item.quantity) || 1;
+        map[pid].total += qty;
+
+        // Determinar estado de pago de la orden
+        let payCategory: "pagado" | "adelanto" | "sinPagar" = "sinPagar";
+
+        if (order) {
+          if (order.payment_status === "pagado") {
+            payCategory = "pagado";
+          } else if (order.payment_status === "pago_parcial") {
+            payCategory = "adelanto";
+          } else if (order.payment_status === "sin_pago") {
+            payCategory = "sinPagar";
+          } else {
+            const paid = Number(order.paid_amount || 0);
+            const total = Number(order.total || 0);
+            const balance = Number(order.balance ?? (total - paid));
+            if (paid <= 0) {
+              payCategory = "sinPagar";
+            } else if (balance <= 0) {
+              payCategory = "pagado";
+            } else {
+              payCategory = "adelanto";
+            }
+          }
+        }
+
+        if (payCategory === "pagado") {
+          map[pid].pagados += qty;
+        } else if (payCategory === "adelanto") {
+          map[pid].adelanto += qty;
+        } else {
+          map[pid].sinPagar += qty;
+        }
+      }
+
+      return map;
+    },
+    staleTime: 60_000,
+  });
+}
+
 export function useProductSalesCounts() {
   return useQuery({
     queryKey: ["product-sales"],

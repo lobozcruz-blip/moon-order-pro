@@ -50,12 +50,32 @@ export const KANBAN_STATUSES: OrderStatus[] = [
 ];
 
 export const PAYMENT_META: Record<PaymentStatus, { label: string; token: string }> = {
-  sin_pago: { label: "Sin pago", token: "st-cancelado" },
-  pago_parcial: { label: "Pago parcial", token: "st-pausado" },
+  sin_pago: { label: "Sin pagar", token: "st-cancelado" },
+  pago_parcial: { label: "Con adelanto", token: "st-pausado" },
   pagado: { label: "Pagado", token: "st-finalizado" },
   reembolso: { label: "Reembolso", token: "st-enviado" },
   cancelado: { label: "Cancelado", token: "st-espera" },
 };
+
+export function getOrderPaymentCategory(order: {
+  payment_status?: string | null;
+  paid_amount?: number | null;
+  total?: number | null;
+  balance?: number | null;
+  status?: string | null;
+}): "sin_pago" | "pago_parcial" | "pagado" {
+  if (order.payment_status === "pagado") return "pagado";
+  if (order.payment_status === "pago_parcial") return "pago_parcial";
+  if (order.payment_status === "sin_pago") return "sin_pago";
+
+  const paid = Number(order.paid_amount || 0);
+  const total = Number(order.total || 0);
+  const bal = Number(order.balance ?? (total - paid));
+
+  if (paid <= 0) return "sin_pago";
+  if (bal <= 0) return "pagado";
+  return "pago_parcial";
+}
 
 export const PRIORITIES: { value: Priority; label: string }[] = [
   { value: "baja", label: "Baja" },

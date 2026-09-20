@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Plus, Search, Pencil, Trash2, ImagePlus, Star, X, Tag, Sparkles, Check, Settings2, Loader2 } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, ImagePlus, Star, X, Tag, Sparkles, Check, Settings2, Loader2, Package } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import {
   useInvalidate,
   nextSku,
   useProductSalesCounts,
+  useProductOrderMetrics,
   useProductThemes,
   saveProductThemeLinks,
   createProductTheme,
@@ -98,6 +99,7 @@ function Productos() {
   const { data: products, isLoading } = useProducts();
   const { data: rules } = usePriceRules();
   const { data: sales } = useProductSalesCounts();
+  const { data: orderMetrics } = useProductOrderMetrics();
   const { data: themes = [] } = useProductThemes(true);
   const invalidate = useInvalidate();
   const { isAdmin } = useAuth();
@@ -448,12 +450,57 @@ function Productos() {
                   </div>
                 )}
 
-                <p className="mt-auto pt-2 text-xs text-muted-foreground">
-                  {p.category === "CORTADORES"
-                    ? "Precio por tamaño"
-                    : money(p.base_price)}{" "}
-                  · {sales?.[p.id] ?? 0} vendidos
-                </p>
+                {/* Precio base o por tamaño */}
+                <div className="mt-auto pt-2 flex items-center justify-between text-xs">
+                  <span className="font-semibold text-foreground">
+                    {p.category === "CORTADORES"
+                      ? "Precio por tamaño"
+                      : money(p.base_price)}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground font-medium">
+                    {sales?.[p.id] ?? 0} total
+                  </span>
+                </div>
+
+                {/* Desglose de piezas en pedidos según estado de pago */}
+                {(() => {
+                  const m = orderMetrics?.[p.id] || { total: 0, pagados: 0, adelanto: 0, sinPagar: 0 };
+                  return (
+                    <div className="mt-2 rounded-xl border border-border/70 bg-card/70 p-2 text-[11px] space-y-1.5 shadow-sm">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground font-medium flex items-center gap-1">
+                          <Package className="h-3.5 w-3.5 text-primary shrink-0" />
+                          <span>En pedidos:</span>
+                        </span>
+                        <span className="font-bold text-foreground">{m.total} pzas</span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-1 pt-1 border-t border-border/50 text-[10px] text-center">
+                        <div
+                          className="rounded-lg bg-emerald-500/10 px-1 py-1 text-emerald-700 dark:text-emerald-400 font-semibold"
+                          title={`${m.pagados} piezas en pedidos 100% liquidados`}
+                        >
+                          <span className="block text-xs font-bold leading-tight">{m.pagados}</span>
+                          <span className="text-[9px] font-medium opacity-85">Pagados</span>
+                        </div>
+                        <div
+                          className="rounded-lg bg-amber-500/10 px-1 py-1 text-amber-700 dark:text-amber-400 font-semibold"
+                          title={`${m.adelanto} piezas en pedidos con anticipo o pago parcial`}
+                        >
+                          <span className="block text-xs font-bold leading-tight">{m.adelanto}</span>
+                          <span className="text-[9px] font-medium opacity-85">Adelanto</span>
+                        </div>
+                        <div
+                          className="rounded-lg bg-rose-500/10 px-1 py-1 text-rose-700 dark:text-rose-400 font-semibold"
+                          title={`${m.sinPagar} piezas en pedidos aún sin pagar`}
+                        >
+                          <span className="block text-xs font-bold leading-tight">{m.sinPagar}</span>
+                          <span className="text-[9px] font-medium opacity-85">Sin pagar</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="mt-2 flex items-center gap-1 border-t border-border/50 pt-2">
                   <Button
