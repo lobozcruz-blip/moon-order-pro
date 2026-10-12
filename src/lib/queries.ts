@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { Category, Modality } from "./cm";
+import { getOrderPaymentCategory, compareOrderPriority, type Category, type Modality } from "./cm";
 
 export type ProductTheme = {
   id: string;
@@ -114,7 +114,8 @@ export function useProductOrderMetrics() {
             is_draft,
             total,
             paid_amount,
-            balance
+            balance,
+            review_status
           )
         `)
         .not("product_id", "is", null);
@@ -129,7 +130,7 @@ export function useProductOrderMetrics() {
 
         const order = item.orders as any;
         // Omitir órdenes en borrador o canceladas
-        if (order && (order.is_draft || order.status === "cancelado")) {
+        if (!order || order.is_draft || order.review_status === "pendiente" || order.status === "cancelado") {
           continue;
         }
 
@@ -137,32 +138,11 @@ export function useProductOrderMetrics() {
           map[pid] = { total: 0, pagados: 0, adelanto: 0, sinPagar: 0 };
         }
 
-        const qty = Number(item.quantity) || 1;
+        const qty = Number(item.quantity) || 0;
         map[pid].total += qty;
 
-        // Determinar estado de pago de la orden
-        let payCategory: "pagado" | "adelanto" | "sinPagar" = "sinPagar";
-
-        if (order) {
-          if (order.payment_status === "pagado") {
-            payCategory = "pagado";
-          } else if (order.payment_status === "pago_parcial") {
-            payCategory = "adelanto";
-          } else if (order.payment_status === "sin_pago") {
-            payCategory = "sinPagar";
-          } else {
-            const paid = Number(order.paid_amount || 0);
-            const total = Number(order.total || 0);
-            const balance = Number(order.balance ?? (total - paid));
-            if (paid <= 0) {
-              payCategory = "sinPagar";
-            } else if (balance <= 0) {
-              payCategory = "pagado";
-            } else {
-              payCategory = "adelanto";
-            }
-          }
-        }
+        const category = getOrderPaymentCategory(order);
+        const payCategory = category === "sin_pago" ? "sinPagar" : category === "pagado" ? "pagado" : "adelanto";
 
         if (payCategory === "pagado") {
           map[pid].pagados += qty;
@@ -180,16 +160,24 @@ export function useProductOrderMetrics() {
 }
 
 export function useProductSalesCounts() {
+  const metrics = useProductOrderMetrics();
+  return { ...metrics, data: metrics.data ? Object.fromEntries(Object.entries(metrics.data).map(([id, m]) => [id, m.pagados + m.adelanto])) : undefined };
+}
+
+export function useProductPendingOrders(productId: string | undefined) {
   return useQuery({
-    queryKey: ["product-sales"],
+    queryKey: ["product-pending-orders", productId],
+    enabled: !!productId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("order_items").select("product_id, quantity");
+      const { data, error } = await supabase.from("orders")
+        .select("*, customers(first_name, last_name), order_items!inner(id, product_id, quantity, done_quantity, is_done)")
+        .eq("order_items.product_id", productId!)
+        .eq("is_draft", false).neq("review_status", "pendiente")
+        .not("status", "in", "(finalizado,cancelado)");
       if (error) throw error;
-      const map: Record<string, number> = {};
-      for (const r of data ?? []) if (r.product_id) map[r.product_id] = (map[r.product_id] ?? 0) + r.quantity;
-      return map;
+      return (data ?? []).sort(compareOrderPriority);
     },
-    staleTime: 120_000,
+    staleTime: 15_000,
   });
 }
 
@@ -312,7 +300,11 @@ export function useActivity() {
 
 export function useInvalidate() {
   const qc = useQueryClient();
-  return (...keys: string[]) => keys.forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+  return (...keys: string[]) => {
+    const related = keys.some(k => ["orders", "order", "payments"].includes(k))
+      ? ["product-order-metrics", "product-pending-orders", "production-queue", "sales-analytics", "dashboard-sales-summary"] : [];
+    [...new Set([...keys, ...related])].forEach(k => qc.invalidateQueries({ queryKey: [k] }));
+  };
 }
 
 export async function nextSku(category: Category) {

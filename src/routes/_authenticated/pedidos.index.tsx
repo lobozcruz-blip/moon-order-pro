@@ -35,12 +35,13 @@ import {
   dateFmt,
   fullName,
   getOrderPaymentCategory,
+  compareOrderPriority,
   type OrderStatus,
 } from "@/lib/cm";
 import { logActivity } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
-export type PaymentFilter = "todos" | "sin_pago" | "pago_parcial" | "pagado";
+export type PaymentFilter = "confirmados" | "todos" | "sin_pago" | "pago_parcial" | "pagado";
 
 export const Route = createFileRoute("/_authenticated/pedidos/")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -75,14 +76,16 @@ function Pedidos() {
   const pendingCount = pending?.length ?? 0;
 
   const invalidate = useInvalidate();
-  const [view, setView] = useState<"kanban" | "lista">("kanban");
+  const [view, setView] = useState<"kanban" | "lista">("lista");
+  const [onlyPending, setOnlyPending] = useState(true);
+  const [sort, setSort] = useState("prioridad");
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<OrderStatus | "todos">("todos");
   const [assignee, setAssignee] = useState<string>("todos");
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>(
     (pago as any) && ["sin_pago", "pago_parcial", "pagado"].includes(pago as string)
       ? (pago as PaymentFilter)
-      : "todos"
+      : "confirmados"
   );
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -90,6 +93,7 @@ function Pedidos() {
   const paymentCounts = useMemo(() => {
     const counts = { todos: 0, sin_pago: 0, pago_parcial: 0, pagado: 0 };
     for (const o of orders ?? []) {
+      if (onlyPending && ["finalizado", "cancelado"].includes(o.status)) continue;
       if (cliente && o.customer_id !== cliente) continue;
       if (status !== "todos" && o.status !== status) continue;
       if (assignee !== "todos" && o.assignee_id !== assignee) continue;
@@ -101,21 +105,22 @@ function Pedidos() {
       }
     }
     return counts;
-  }, [orders, cliente, status, assignee]);
+  }, [orders, cliente, status, assignee, onlyPending]);
 
   const rows = useMemo(() => {
     const t = q.trim().toLowerCase();
     return (orders ?? []).filter(
       (o) =>
         (!cliente || o.customer_id === cliente) &&
+        (!onlyPending || !["finalizado", "cancelado"].includes(o.status)) &&
         (status === "todos" || o.status === status) &&
         (assignee === "todos" || o.assignee_id === assignee) &&
-        (paymentFilter === "todos" || getOrderPaymentCategory(o) === paymentFilter) &&
+        (paymentFilter === "todos" || (paymentFilter === "confirmados" ? getOrderPaymentCategory(o) !== "sin_pago" : getOrderPaymentCategory(o) === paymentFilter)) &&
         (!t ||
           (o.folio ?? "").toLowerCase().includes(t) ||
           fullName(o.customers?.first_name, o.customers?.last_name).toLowerCase().includes(t)),
-    );
-  }, [orders, q, status, assignee, cliente, paymentFilter]);
+    ).sort(sort === "prioridad" ? compareOrderPriority : (a, b) => b.created_at.localeCompare(a.created_at));
+  }, [orders, q, status, assignee, cliente, paymentFilter, sort, onlyPending]);
 
   const move = async (id: string, next: OrderStatus, prev: OrderStatus) => {
     if (next === prev) return;
@@ -182,6 +187,19 @@ function Pedidos() {
         }
       />
 
+      <div className="mb-3 flex flex-wrap gap-2">
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={onlyPending} onChange={e => setOnlyPending(e.target.checked)} />Sólo pendientes</label>
+        <Button variant={paymentFilter === "confirmados" ? "default" : "outline"} onClick={() => setPaymentFilter("confirmados")}>Pedidos con pago o adelanto</Button>
+        <Button variant={paymentFilter === "sin_pago" ? "default" : "outline"} onClick={() => setPaymentFilter("sin_pago")}>Cotizaciones sin pago</Button>
+        <Select value={sort} onValueChange={setSort}>
+          <SelectTrigger className="w-64"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="prioridad">Prioridad y fecha de entrega</SelectItem>
+            <SelectItem value="recientes">Más recientes</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <p className="mb-3 text-xs text-muted-foreground">Urgente → Alta → Normal → Baja. Dentro de cada prioridad, primero la entrega más próxima. Puedes cambiar la prioridad al abrir el pedido.</p>
       {/* Pestañas rápidas de estado de pago */}
       <div className="mb-3 flex flex-wrap items-center gap-1.5 p-1 bg-muted/40 rounded-xl border border-border/60">
         <button
@@ -194,7 +212,7 @@ function Pedidos() {
               : "text-muted-foreground hover:text-foreground hover:bg-background/50",
           )}
         >
-          <span>Todos los pagos</span>
+          <span>Pedidos y cotizaciones</span>
           <span className="text-[10px] opacity-75 px-1.5 py-0.2 rounded-full bg-secondary">
             {paymentCounts.todos}
           </span>
@@ -211,7 +229,7 @@ function Pedidos() {
           )}
         >
           <span className="h-2 w-2 rounded-full bg-rose-500 shrink-0" />
-          <span>Sin pagar</span>
+          <span>Cotizaciones</span>
           <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-rose-500/15 text-rose-700 dark:text-rose-300">
             {paymentCounts.sin_pago}
           </span>
@@ -280,8 +298,9 @@ function Pedidos() {
             <SelectValue placeholder="Estado de pago" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="todos">Todos los pagos ({paymentCounts.todos})</SelectItem>
-            <SelectItem value="sin_pago">Sin pagar ({paymentCounts.sin_pago})</SelectItem>
+            <SelectItem value="confirmados">Pedidos con pago o adelanto</SelectItem>
+            <SelectItem value="todos">Pedidos y cotizaciones ({paymentCounts.todos})</SelectItem>
+            <SelectItem value="sin_pago">Cotizaciones ({paymentCounts.sin_pago})</SelectItem>
             <SelectItem value="pago_parcial">Con adelanto ({paymentCounts.pago_parcial})</SelectItem>
             <SelectItem value="pagado">Pagados ({paymentCounts.pagado})</SelectItem>
           </SelectContent>
@@ -350,7 +369,7 @@ function Pedidos() {
           {rows.map((o) => {
             const stMeta = STATUS_META[o.status] ?? STATUS_META.en_espera;
             const payCategory = getOrderPaymentCategory(o);
-            const payMeta = (o.payment_status && PAYMENT_META[o.payment_status]) ? PAYMENT_META[o.payment_status] : PAYMENT_META[payCategory];
+            const payMeta = PAYMENT_META[payCategory];
             const itemSub = Number(o.subtotal || 0);
             const disc = Number(o.discount || 0);
             const ship = Number(o.shipping_cost || 0);
@@ -362,6 +381,7 @@ function Pedidos() {
                 params={{ orderId: o.id }}
                 className="flex flex-wrap items-center gap-3 p-3 transition-colors hover:bg-secondary"
               >
+                <span className="chip">{PRIORITIES.find(p => p.value === o.priority)?.label}</span>
                 <span className="font-mono text-xs text-muted-foreground">{o.folio ?? "—"}</span>
                 <span className="min-w-0 flex-1 truncate text-sm font-medium">
                   {fullName(o.customers?.first_name, o.customers?.last_name)}
@@ -462,7 +482,7 @@ function OrderCard({
   const today = new Date().toISOString().slice(0, 10);
   const late = order.due_date && order.due_date < today && order.status !== "finalizado";
   const payCategory = getOrderPaymentCategory(order);
-  const payMeta = (order.payment_status && PAYMENT_META[order.payment_status]) ? PAYMENT_META[order.payment_status] : PAYMENT_META[payCategory];
+  const payMeta = PAYMENT_META[payCategory];
 
   const itemSub = Number(order.subtotal || 0);
   const disc = Number(order.discount || 0);

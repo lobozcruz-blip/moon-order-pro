@@ -322,7 +322,7 @@ export function useDashboardSalesSummary() {
       const calcVendido = (start: string, end: string) => {
         return orders
           .filter((o) => {
-            if (o.status === "cancelado") return false;
+            if (o.status === "cancelado" || Number(o.paid_amount || 0) <= 0) return false;
             const dateStr = toMexicoDateStr(o.created_at);
             return dateStr >= start && dateStr <= end;
           })
@@ -451,6 +451,7 @@ export function useSalesAnalytics(
       let prevPeriodVendido = 0;
 
       for (const o of allOrders) {
+        if (Number(o.paid_amount || 0) <= 0) continue;
         const dateStr = toMexicoDateStr(o.created_at);
         const isCanceled = o.status === "cancelado";
 

@@ -64,10 +64,6 @@ export function getOrderPaymentCategory(order: {
   balance?: number | null;
   status?: string | null;
 }): "sin_pago" | "pago_parcial" | "pagado" {
-  if (order.payment_status === "pagado") return "pagado";
-  if (order.payment_status === "pago_parcial") return "pago_parcial";
-  if (order.payment_status === "sin_pago") return "sin_pago";
-
   const paid = Number(order.paid_amount || 0);
   const total = Number(order.total || 0);
   const bal = Number(order.balance ?? (total - paid));
@@ -75,6 +71,13 @@ export function getOrderPaymentCategory(order: {
   if (paid <= 0) return "sin_pago";
   if (bal <= 0) return "pagado";
   return "pago_parcial";
+}
+
+export function compareOrderPriority(a: { priority: string; due_date: string | null; created_at: string }, b: { priority: string; due_date: string | null; created_at: string }) {
+  const rank: Record<string, number> = { urgente: 0, alta: 1, normal: 2, baja: 3 };
+  return (rank[a.priority] ?? 2) - (rank[b.priority] ?? 2)
+    || (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999")
+    || a.created_at.localeCompare(b.created_at);
 }
 
 export const PRIORITIES: { value: Priority; label: string }[] = [

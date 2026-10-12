@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Plus, Search, Pencil, Trash2, ImagePlus, Star, X, Tag, Sparkles, Check, Settings2, Loader2, Package } from "lucide-react";
 import { toast } from "sonner";
@@ -25,6 +25,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import {
   useProducts,
+  useProductPendingOrders,
   usePriceRules,
   priceFor,
   useInvalidate,
@@ -44,6 +45,11 @@ import {
   MODALITIES,
   SIZES,
   money,
+  fullName,
+  dateFmt,
+  getOrderPaymentCategory,
+  STATUS_META,
+  PRIORITIES,
   type Category,
   type Modality,
 } from "@/lib/cm";
@@ -104,6 +110,8 @@ function Productos() {
   const invalidate = useInvalidate();
   const { isAdmin } = useAuth();
 
+  const [selectedProduct, setSelectedProduct] = useState<{ id: string; name: string } | null>(null);
+  const { data: productOrders, isLoading: loadingOrders, isError: ordersError } = useProductPendingOrders(selectedProduct?.id);
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<Category | "TODAS">("TODAS");
   const [themeFilter, setThemeFilter] = useState<string>("TODAS");
@@ -436,7 +444,8 @@ function Productos() {
                   {!p.active && <span className="chip bg-secondary text-[11px] text-muted-foreground">Inactivo</span>}
                 </div>
 
-                <p className="mt-2 line-clamp-2 text-sm font-semibold">{p.name}</p>
+                <button className="mt-2 text-left text-sm font-semibold hover:underline" onClick={() => setSelectedProduct(p)}>{p.name}</button>
+                <Button variant="outline" size="sm" className="mt-2" onClick={() => setSelectedProduct(p)}>Ver pedidos pendientes</Button>
                 <p className="text-xs text-muted-foreground">{p.sku}</p>
 
                 {/* Temáticas del producto */}
@@ -458,7 +467,7 @@ function Productos() {
                       : money(p.base_price)}
                   </span>
                   <span className="text-[11px] text-muted-foreground font-medium">
-                    {sales?.[p.id] ?? 0} total
+                    {sales?.[p.id] ?? 0} vendidas
                   </span>
                 </div>
 
@@ -495,7 +504,7 @@ function Productos() {
                           title={`${m.sinPagar} piezas en pedidos aún sin pagar`}
                         >
                           <span className="block text-xs font-bold leading-tight">{m.sinPagar}</span>
-                          <span className="text-[9px] font-medium opacity-85">Sin pagar</span>
+                          <span className="text-[9px] font-medium opacity-85">Cotizaciones</span>
                         </div>
                       </div>
                     </div>
@@ -811,6 +820,26 @@ function Productos() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!selectedProduct} onOpenChange={v => !v && setSelectedProduct(null)}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader><DialogTitle>{selectedProduct?.name} · Pedidos pendientes</DialogTitle></DialogHeader>
+          {loadingOrders && <p>Cargando pedidos…</p>}
+          {ordersError && <p role="alert">No se pudieron cargar los pedidos. Cierra y vuelve a abrir para reintentar.</p>}
+          {!loadingOrders && !ordersError && !productOrders?.length && <p>No hay pedidos pendientes para este producto.</p>}
+          {([false, true] as const).map(quotation => {
+            const rows = (productOrders ?? []).filter(o => (getOrderPaymentCategory(o) === "sin_pago") === quotation);
+            if (!rows.length) return null;
+            return <section key={String(quotation)} className="space-y-2">
+              <h3 className="font-semibold">{quotation ? "Cotizaciones · sin pago" : "Pedidos · con pago o adelanto"}</h3>
+              {rows.map(o => <Link key={o.id} to="/pedidos/$orderId" params={{ orderId: o.id }} className="block rounded-xl border p-3 hover:bg-secondary">
+                <p className="font-semibold">{o.folio} · {fullName(o.customers?.first_name, o.customers?.last_name)}</p>
+                <p className="text-sm">{STATUS_META[o.status].label} · {PRIORITIES.find(p => p.value === o.priority)?.label} · Entrega: {dateFmt(o.due_date)}</p>
+                <p className="text-sm">{o.order_items.reduce((n, i) => n + i.quantity, 0)} piezas · {o.order_items.reduce((n, i) => n + (i.is_done ? 0 : Math.max(0, i.quantity - i.done_quantity)), 0)} pendientes · Abonado: {money(o.paid_amount)}</p>
+              </Link>)}
+            </section>;
+          })}
+        </DialogContent>
+      </Dialog>
       <ImageViewer
         open={!!viewer}
         onOpenChange={(v) => !v && setViewer(null)}
