@@ -1,3 +1,4 @@
+import { withProductionStatus, productionStatus } from "./order-tracking";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getOrderPaymentCategory, compareOrderPriority, type Category, type Modality } from "./cm";
@@ -170,12 +171,12 @@ export function useProductPendingOrders(productId: string | undefined) {
     enabled: !!productId,
     queryFn: async () => {
       const { data, error } = await supabase.from("orders")
-        .select("*, customers(first_name, last_name), order_items!inner(id, product_id, quantity, done_quantity, is_done)")
+        .select("*, customers(first_name, last_name), order_items!inner(id, product_id, quantity, done_quantity, is_done), production_items:order_items(quantity, done_quantity, is_done)")
         .eq("order_items.product_id", productId!)
         .eq("is_draft", false).neq("review_status", "pendiente")
         .not("status", "in", "(finalizado,cancelado)");
       if (error) throw error;
-      return (data ?? []).sort(compareOrderPriority);
+      return (data ?? []).map(o => ({ ...o, status: productionStatus(o.status, o.production_items) })).sort(compareOrderPriority);
     },
     staleTime: 15_000,
   });
@@ -234,7 +235,7 @@ export async function fetchOrders() {
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map(withProductionStatus);
 }
 
 export function useOrders() {
@@ -261,7 +262,7 @@ export function useOrder(id: string) {
         .eq("id", id)
         .single();
       if (error) throw error;
-      return data;
+      return withProductionStatus(data);
     },
     staleTime: 5_000,
   });
@@ -302,7 +303,7 @@ export function useInvalidate() {
   const qc = useQueryClient();
   return (...keys: string[]) => {
     const related = keys.some(k => ["orders", "order", "payments"].includes(k))
-      ? ["product-order-metrics", "product-pending-orders", "production-queue", "sales-analytics", "dashboard-sales-summary"] : [];
+      ? ["product-order-metrics", "product-pending-orders", "production-queue", "sales-analytics", "dashboard-sales-summary", "my-orders"] : [];
     [...new Set([...keys, ...related])].forEach(k => qc.invalidateQueries({ queryKey: [k] }));
   };
 }
@@ -377,7 +378,7 @@ export function useProductionQueue() {
           id: order.id,
           folio: order.folio,
           priority: order.priority,
-          status: order.status,
+          status: productionStatus(order.status, order.order_items),
           due_date: order.due_date,
           created_at: order.created_at,
           customers: order.customers,

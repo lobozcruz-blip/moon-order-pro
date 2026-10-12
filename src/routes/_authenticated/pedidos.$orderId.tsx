@@ -81,7 +81,7 @@ import { CustomDesignViewerModal } from "@/components/orders/CustomDesignViewerM
 import { buildCustomerOrderSummary, resolveOrderItemDisplayImage } from "@/lib/order-summary";
 import { useAuth } from "@/lib/auth";
 import { OrderLabelsEditor } from "@/components/orders/OrderLabelsEditor";
-import { ORDER_LABEL_TITLE, productionProgress } from "@/lib/order-tracking";
+import { ORDER_LABEL_TITLE, productionProgress, productionStatus } from "@/lib/order-tracking";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/pedidos/$orderId")({
@@ -193,6 +193,7 @@ function DetallePedido() {
   } | null>(null);
 
   // Estado para ELIMINAR artículo
+  const [finishing, setFinishing] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<any | null>(null);
 
   if (isLoading) return <p className="py-16 text-center text-sm text-muted-foreground">Cargando…</p>;
@@ -573,10 +574,11 @@ function DetallePedido() {
 
   const setItemQty = async (id: string, doneQty: number, qty: number) => {
     const value = Math.max(0, Math.min(qty, doneQty));
-    await supabase
+    const { error } = await supabase
       .from("order_items")
       .update({ done_quantity: value, is_done: value >= qty })
       .eq("id", id);
+    if (error) { toast.error(error.message); return; }
     refresh();
   };
 
@@ -601,6 +603,20 @@ function DetallePedido() {
         subtitle={`${fullName(order.customers?.first_name, order.customers?.last_name)} · ${dateTimeFmt(order.created_at)}`}
         action={
           <div className="flex flex-wrap items-center gap-2">
+            <Button disabled={finishing || order.status === "finalizado" || order.status === "cancelado"}
+              onClick={async () => {
+                setFinishing(true);
+                try {
+                  const { data, error } = await supabase.from("orders").update({ status: "finalizado" }).eq("id", orderId).select("id").single();
+                  if (error || !data) throw error ?? new Error("No se pudo finalizar el pedido");
+                  await logActivity({ action: "Pedido finalizado manualmente", entity: "order", order_id: orderId });
+                  await refresh();
+                  toast.success("Pedido finalizado. Puedes verlo en Finalizados.");
+                } catch (e) { toast.error(e instanceof Error ? e.message : "No se pudo finalizar"); }
+                finally { setFinishing(false); }
+              }}>
+              <Check className="mr-1.5 h-4 w-4" />{order.status === "finalizado" ? "Finalizado" : finishing ? "Finalizando…" : "Finalizado"}
+            </Button>
             <Button
               variant="outline"
               className="tap font-medium border-primary/40 hover:bg-primary/10"
@@ -903,6 +919,7 @@ function DetallePedido() {
               <Label>Estado</Label>
               <Select
                 value={order.status}
+                disabled={order.status === "finalizado"}
                 onValueChange={(v) =>
                   patchOrder({ status: v as OrderStatus }, "Estado actualizado")
                 }
@@ -911,7 +928,7 @@ function DetallePedido() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ORDER_STATUSES.map((s) => (
+                  {([...new Set([order.status, "pausado", "cancelado", productionStatus("en_espera", items)])] as OrderStatus[]).filter(s => s !== "finalizado" || order.status === "finalizado").map((s) => (
                     <SelectItem key={s} value={s}>
                       {STATUS_META[s].label}
                     </SelectItem>
@@ -919,6 +936,7 @@ function DetallePedido() {
                 </SelectContent>
               </Select>
             </div>
+            <p className="text-xs text-muted-foreground">El estado sigue el avance de las piezas. Usa el botón Finalizado cuando el pedido ya esté cerrado.</p>
             <div className="space-y-2">
               <Label>Prioridad</Label>
               <Select

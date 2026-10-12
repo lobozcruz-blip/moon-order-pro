@@ -1,3 +1,4 @@
+import { withProductionStatus } from "./order-tracking";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -47,11 +48,11 @@ export function useMyOrders(customerId: string | null | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("*, order_items(id, product_name, quantity, unit_price, subtotal)")
+        .select("*, order_items(id, product_name, quantity, done_quantity, is_done, unit_price, subtotal)")
         .eq("customer_id", customerId!)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []).map(withProductionStatus);
     },
     enabled: !!customerId,
     staleTime: 30_000,

@@ -56,7 +56,7 @@ function Panel() {
     { label: "Pedidos activos", value: open.length, icon: ClipboardList, token: "primary" },
     { label: "En espera", value: byStatus("en_espera"), icon: Clock, token: "st-espera" },
     { label: "En preparación", value: byStatus("en_preparacion"), icon: Hammer, token: "st-preparacion" },
-    { label: "Enviados", value: byStatus("enviado"), icon: Truck, token: "st-enviado" },
+    { label: "Listos para enviar o entregar", value: byStatus("enviado"), icon: Truck, token: "st-enviado" },
     { label: "Finalizados", value: byStatus("finalizado"), icon: CheckCircle2, token: "st-finalizado" },
   ];
 

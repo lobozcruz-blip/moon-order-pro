@@ -36,7 +36,7 @@ export const ORDER_STATUSES: OrderStatus[] = [
 export const STATUS_META: Record<OrderStatus, { label: string; token: string; icon: string }> = {
   en_espera: { label: "En espera", token: "st-espera", icon: "⏳" },
   en_preparacion: { label: "En preparación", token: "st-preparacion", icon: "🛠" },
-  enviado: { label: "Enviado", token: "st-enviado", icon: "🚚" },
+  enviado: { label: "Listo para enviar o entregar", token: "st-enviado", icon: "📦" },
   finalizado: { label: "Finalizado", token: "st-finalizado", icon: "✅" },
   pausado: { label: "Pausado", token: "st-pausado", icon: "⏸" },
   cancelado: { label: "Cancelado", token: "st-cancelado", icon: "✕" },

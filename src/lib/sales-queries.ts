@@ -1,4 +1,4 @@
-import { confirmedReceivable } from "./order-tracking";
+import { withProductionStatus, confirmedReceivable } from "./order-tracking";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { OrderStatus, PaymentStatus, DeliveryType, Category } from "./cm";
@@ -415,7 +415,7 @@ export function useSalesAnalytics(
           subtotal, discount, shipping_cost, total, paid_amount, balance,
           is_draft, review_status, created_at,
           customers(id, first_name, last_name, phone),
-          order_items(id, category, quantity, unit_price, subtotal)
+          order_items(id, category, quantity, done_quantity, is_done, unit_price, subtotal)
         `)
         .eq("is_draft", false)
         .neq("review_status", "pendiente")
@@ -444,7 +444,7 @@ export function useSalesAnalytics(
         profileMap.set(p.id, p.full_name || p.email || "Usuario");
       });
 
-      const allOrders = rawOrders ?? [];
+      const allOrders = (rawOrders ?? []).map(withProductionStatus);
       const allPayments = rawPayments ?? [];
 
       // Filtrar órdenes válidas para el periodo actual

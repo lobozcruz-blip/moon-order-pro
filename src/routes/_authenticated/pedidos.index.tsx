@@ -137,6 +137,10 @@ function Pedidos() {
 
   const move = async (id: string, next: OrderStatus, prev: OrderStatus) => {
     if (next === prev) return;
+    if (prev === "finalizado" || !["pausado", "cancelado"].includes(next)) {
+      toast.info("El avance cambia el estado automáticamente. Para finalizar, abre el pedido y pulsa Finalizado.");
+      return;
+    }
     const { error } = await supabase.from("orders").update({ status: next }).eq("id", id);
     if (error) {
       toast.error(error.message);
@@ -201,11 +205,14 @@ function Pedidos() {
       />
 
       <div className="mb-3 flex flex-wrap gap-2">
+        <Button variant={status === "finalizado" ? "default" : "outline"} onClick={() => {
+          setOnlyPending(false); setStatus("finalizado"); setPaymentFilter("todos"); setLabelFilter("__all__"); setQ(""); setAssignee("todos");
+        }}>Finalizados</Button>
         <Select value={labelFilter} onValueChange={setLabelFilter}>
           <SelectTrigger className="w-64" aria-label="Filtrar pedidos por etiqueta"><SelectValue placeholder="Todas las etiquetas" /></SelectTrigger>
           <SelectContent><SelectItem value="__all__">Todas las etiquetas</SelectItem>{labelOptions.map(([key, name]) => <SelectItem key={key} value={"label:" + key}>{name}</SelectItem>)}</SelectContent>
         </Select>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={onlyPending} onChange={e => setOnlyPending(e.target.checked)} />Sólo pendientes</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={onlyPending} onChange={e => { setOnlyPending(e.target.checked); if (e.target.checked && status === "finalizado") setStatus("todos"); }} />Sólo pendientes</label>
         <Button variant={paymentFilter === "confirmados" ? "default" : "outline"} onClick={() => setPaymentFilter("confirmados")}>Pedidos con pago o adelanto</Button>
         <Button variant={paymentFilter === "sin_pago" ? "default" : "outline"} onClick={() => setPaymentFilter("sin_pago")}>Cotizaciones sin pago</Button>
         <Select value={sort} onValueChange={setSort}>
@@ -216,6 +223,7 @@ function Pedidos() {
           </SelectContent>
         </Select>
       </div>
+      <p className="mb-2 text-xs text-muted-foreground">El avance organiza los pedidos automáticamente. Sólo el botón Finalizado dentro del pedido los cierra.</p>
       <p className="mb-3 text-xs text-muted-foreground">Urgente → Alta → Normal → Baja. Dentro de cada prioridad, primero la entrega más próxima. Puedes cambiar la prioridad al abrir el pedido.</p>
       {/* Pestañas rápidas de estado de pago */}
       <div className="mb-3 flex flex-wrap items-center gap-1.5 p-1 bg-muted/40 rounded-xl border border-border/60">
@@ -324,7 +332,7 @@ function Pedidos() {
         </Select>
 
         {/* 3. Filtro de Estado de Producción */}
-        <Select value={status} onValueChange={(v) => setStatus(v as OrderStatus | "todos")}>
+        <Select value={status} onValueChange={(v) => { setStatus(v as OrderStatus | "todos"); if (v === "finalizado" || v === "cancelado") setOnlyPending(false); }}>
           <SelectTrigger className="tap">
             <SelectValue />
           </SelectTrigger>
@@ -471,7 +479,7 @@ function Column({
       </div>
       <div className="flex flex-col gap-2">
         {orders.map((o) => (
-          <OrderCard key={o.id} order={o} onMove={onMove} draggable />
+          <OrderCard key={o.id} order={o} onMove={onMove} />
         ))}
         {orders.length === 0 && (
           <div className="rounded-xl border border-dashed border-border py-8 text-center text-xs text-muted-foreground">
@@ -562,6 +570,7 @@ function OrderCard({
       </div>
 
       <Select
+        disabled={order.status === "finalizado"}
         value={order.status ?? "en_espera"}
         onValueChange={(v) => onMove(order.id, v as OrderStatus, order.status)}
       >
@@ -569,7 +578,7 @@ function OrderCard({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {ORDER_STATUSES.map((s) => (
+          {([...new Set([order.status, "pausado", "cancelado"])] as OrderStatus[]).map((s) => (
             <SelectItem key={s} value={s}>
               {STATUS_META[s]?.label ?? s}
             </SelectItem>

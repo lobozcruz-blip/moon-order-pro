@@ -1,7 +1,30 @@
 // Run with Node 22.6+: node --experimental-strip-types --test tests/order-tracking.test.ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { productionProgress, confirmedReceivable, normalizeOrderLabel, orderLabels, ORDER_LABEL_TITLE } from "../src/lib/order-tracking.ts";
+import { productionStatus, withProductionStatus, productionProgress, confirmedReceivable, normalizeOrderLabel, orderLabels, ORDER_LABEL_TITLE } from "../src/lib/order-tracking.ts";
+
+test("active stages follow real completed pieces and never finalize automatically", () => {
+  const items = [{ quantity: 43, done_quantity: 38, is_done: false }];
+  assert.equal(productionStatus("en_espera", items), "en_preparacion");
+  assert.equal(productionStatus("en_espera", [{ ...items[0]!, done_quantity: 43 }]), "enviado");
+  assert.equal(productionStatus("enviado", items), "en_preparacion");
+  assert.equal(productionStatus("en_preparacion", []), "en_espera");
+  assert.equal(productionStatus("enviado", [{ quantity: 2, done_quantity: 0, is_done: false }]), "en_espera");
+  assert.equal(productionStatus("en_espera", [{ quantity: 2, done_quantity: 0, is_done: true }]), "enviado");
+  for (const status of ["finalizado", "pausado", "cancelado"] as const) {
+    assert.equal(productionStatus(status, items), status);
+    assert.equal(productionStatus(status, []), status);
+  }
+  const original = { id: "existing-order", status: "en_espera" as const, order_items: items };
+  assert.equal(withProductionStatus(original).status, "en_preparacion");
+  assert.equal(original.status, "en_espera");
+});
+
+test("rounding cannot show 100 percent with unfinished pieces", () => {
+  const items = [{ quantity: 200, done_quantity: 199, is_done: false }];
+  assert.equal(productionProgress(items).percent, 99);
+  assert.equal(productionStatus("en_espera", items), "en_preparacion");
+});
 
 test("production uses pieces and clamps invalid progress", () => {
   const item = (quantity: number, done_quantity = 0, is_done = false) => ({ quantity, done_quantity, is_done });
