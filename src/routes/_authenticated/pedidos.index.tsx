@@ -40,7 +40,8 @@ import {
 } from "@/lib/cm";
 import { logActivity } from "@/lib/storage";
 import { Progress } from "@/components/ui/progress";
-import { orderLabels, normalizeOrderLabel, productionProgress } from "@/lib/order-tracking";
+import { orderLabels, normalizeOrderLabel, productionProgress, productSegmentKey, matchesProductSegment } from "@/lib/order-tracking";
+import { OrderLabelsManager } from "@/components/orders/OrderLabelsManager";
 import { cn } from "@/lib/utils";
 
 export type PaymentFilter = "confirmados" | "todos" | "sin_pago" | "pago_parcial" | "pagado";
@@ -82,6 +83,15 @@ function Pedidos() {
   const [view, setView] = useState<"kanban" | "lista">("lista");
   const [onlyPending, setOnlyPending] = useState(true);
   const [sort, setSort] = useState("prioridad");
+  const [productFilter, setProductFilter] = useState("__all__");
+  const [onlyMissingProduct, setOnlyMissingProduct] = useState(false);
+  const productOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    for (const o of orders ?? []) for (const item of o.order_items) {
+      options.set(productSegmentKey(item), `${item.product_sku ? item.product_sku + " · " : ""}${item.product_name}`);
+    }
+    return [...options.entries()].sort((a, b) => a[1].localeCompare(b[1], "es"));
+  }, [orders]);
   const [labelFilter, setLabelFilter] = useState("__all__");
   const labelOptions = useMemo(() => {
     const names = new Map<string, string>();
@@ -104,6 +114,7 @@ function Pedidos() {
   const paymentCounts = useMemo(() => {
     const counts = { todos: 0, sin_pago: 0, pago_parcial: 0, pagado: 0 };
     for (const o of orders ?? []) {
+      if (!matchesProductSegment(o.order_items, productFilter, onlyMissingProduct)) continue;
       if (onlyPending && ["finalizado", "cancelado"].includes(o.status)) continue;
       if (labelFilter !== "__all__" && !orderLabels(o.order_notes).some(n => "label:" + normalizeOrderLabel(n.body!) === labelFilter)) continue;
       if (cliente && o.customer_id !== cliente) continue;
@@ -117,12 +128,13 @@ function Pedidos() {
       }
     }
     return counts;
-  }, [orders, cliente, status, assignee, onlyPending, labelFilter]);
+  }, [orders, cliente, status, assignee, onlyPending, labelFilter, productFilter, onlyMissingProduct]);
 
   const rows = useMemo(() => {
     const t = q.trim().toLowerCase();
     return (orders ?? []).filter(
       (o) =>
+        matchesProductSegment(o.order_items, productFilter, onlyMissingProduct) &&
         (labelFilter === "__all__" || orderLabels(o.order_notes).some(n => "label:" + normalizeOrderLabel(n.body!) === labelFilter)) &&
         (!cliente || o.customer_id === cliente) &&
         (!onlyPending || !["finalizado", "cancelado"].includes(o.status)) &&
@@ -133,7 +145,7 @@ function Pedidos() {
           (o.folio ?? "").toLowerCase().includes(t) ||
           fullName(o.customers?.first_name, o.customers?.last_name).toLowerCase().includes(t)),
     ).sort(sort === "prioridad" ? compareOrderPriority : (a, b) => b.created_at.localeCompare(a.created_at));
-  }, [orders, q, status, assignee, cliente, paymentFilter, sort, onlyPending, labelFilter]);
+  }, [orders, q, status, assignee, cliente, paymentFilter, sort, onlyPending, labelFilter, productFilter, onlyMissingProduct]);
 
   const move = async (id: string, next: OrderStatus, prev: OrderStatus) => {
     if (next === prev) return;
@@ -173,7 +185,8 @@ function Pedidos() {
         title="Pedidos"
         subtitle={`${rows.length} pedidos`}
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <OrderLabelsManager orders={orders ?? []} buttonLabel="Crear etiqueta" />
             <Button asChild variant="secondary" className="tap relative">
               <Link to="/pedidos/pendientes">
                 <Inbox className="h-4 w-4" />
@@ -204,9 +217,17 @@ function Pedidos() {
         }
       />
 
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Select value={productFilter} onValueChange={setProductFilter}>
+          <SelectTrigger className="w-full sm:w-80" aria-label="Filtrar pedidos por producto"><SelectValue placeholder="Todos los productos" /></SelectTrigger>
+          <SelectContent><SelectItem value="__all__">Todos los productos</SelectItem>{productOptions.map(([key, name]) => <SelectItem key={key} value={key}>{name}</SelectItem>)}</SelectContent>
+        </Select>
+        <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={onlyMissingProduct} disabled={productFilter === "__all__"} onChange={e => setOnlyMissingProduct(e.target.checked)} />Sólo pedidos donde falta ese producto</label>
+        {(productFilter !== "__all__" || labelFilter !== "__all__") && <Button variant="ghost" size="sm" onClick={() => { setProductFilter("__all__"); setOnlyMissingProduct(false); setLabelFilter("__all__"); }}>Limpiar producto y etiqueta</Button>}
+      </div>
       <div className="mb-3 flex flex-wrap gap-2">
         <Button variant={status === "finalizado" ? "default" : "outline"} onClick={() => {
-          setOnlyPending(false); setStatus("finalizado"); setPaymentFilter("todos"); setLabelFilter("__all__"); setQ(""); setAssignee("todos");
+          setOnlyPending(false); setStatus("finalizado"); setPaymentFilter("todos"); setLabelFilter("__all__"); setQ(""); setAssignee("todos"); setProductFilter("__all__"); setOnlyMissingProduct(false);
         }}>Finalizados</Button>
         <Select value={labelFilter} onValueChange={setLabelFilter}>
           <SelectTrigger className="w-64" aria-label="Filtrar pedidos por etiqueta"><SelectValue placeholder="Todas las etiquetas" /></SelectTrigger>
@@ -400,11 +421,11 @@ function Pedidos() {
             const ship = Number(o.shipping_cost || 0);
             const displayTotal = itemSub > 0 || ship > 0 ? Math.max(0, itemSub - disc + ship) : Number(o.total || 0);
             return (
+              <div key={o.id} className="flex items-center gap-2 pr-3">
               <Link
-                key={o.id}
                 to="/pedidos/$orderId"
                 params={{ orderId: o.id }}
-                className="flex flex-wrap items-center gap-3 p-3 transition-colors hover:bg-secondary"
+                className="min-w-0 flex flex-1 flex-wrap items-center gap-3 p-3 transition-colors hover:bg-secondary"
               >
                 <span className="chip">{PRIORITIES.find(p => p.value === o.priority)?.label}</span>
                 <span className="font-mono text-xs text-muted-foreground">{o.folio ?? "—"}</span>
@@ -436,6 +457,8 @@ function Pedidos() {
                 <div className="w-full sm:w-56"><OrderProgress order={o} /></div>
                 {orderLabels(o.order_notes).length > 0 && <div className="flex w-full flex-wrap gap-1">{orderLabels(o.order_notes).map(n => <span key={n.id} className="chip bg-primary/10 text-primary">{n.body}</span>)}</div>}
               </Link>
+              <OrderLabelsManager orders={[o]} />
+              </div>
             );
           })}
           {!isLoading && rows.length === 0 && (
@@ -547,6 +570,7 @@ function OrderCard({
       </div>
 
       <div className="mt-2"><OrderProgress order={order} /></div>
+      <div className="mt-2"><OrderLabelsManager orders={[order]} /></div>
       {orderLabels(order.order_notes).length > 0 && <div className="mt-2 flex flex-wrap gap-1">{orderLabels(order.order_notes).map(n => <span key={n.id} className="chip bg-primary/10 text-primary">{n.body}</span>)}</div>}
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">

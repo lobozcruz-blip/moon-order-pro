@@ -228,7 +228,7 @@ export async function fetchOrders() {
   const { data, error } = await supabase
     .from("orders")
     .select(
-      "*, customers(id, first_name, last_name, phone), order_items(id, quantity, done_quantity, is_done, category), order_notes(id, title, body)",
+      "*, customers(id, first_name, last_name, phone), order_items(id, product_id, product_name, product_sku, quantity, done_quantity, is_done, category), order_notes(id, title, body)",
     )
     .eq("is_draft", false)
     .neq("review_status", "pendiente")

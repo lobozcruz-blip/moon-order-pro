@@ -1,7 +1,21 @@
 // Run with Node 22.6+: node --experimental-strip-types --test tests/order-tracking.test.ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { productionStatus, withProductionStatus, productionProgress, confirmedReceivable, normalizeOrderLabel, orderLabels, ORDER_LABEL_TITLE } from "../src/lib/order-tracking.ts";
+import { matchesProductSegment, productSegmentKey, productionStatus, withProductionStatus, productionProgress, confirmedReceivable, normalizeOrderLabel, orderLabels, ORDER_LABEL_TITLE } from "../src/lib/order-tracking.ts";
+
+test("product segments match identity and distinguish pending pieces", () => {
+  const item = { product_id: "calendar", product_name: "Calendario", quantity: 5, done_quantity: 3, is_done: false };
+  const key = productSegmentKey(item);
+  assert.equal(matchesProductSegment([item], key), true);
+  assert.equal(matchesProductSegment([item], key, true), true);
+  assert.equal(matchesProductSegment([{ ...item, done_quantity: 5 }], key, true), false);
+  assert.equal(matchesProductSegment([{ ...item, is_done: true }], key, true), false);
+  assert.equal(matchesProductSegment([{ ...item, product_id: "different" }], key), false);
+  assert.equal(matchesProductSegment([], "__all__", true), true);
+  assert.equal(matchesProductSegment([{ ...item, is_done: true }, item], key, true), true);
+  assert.equal(productSegmentKey({ product_id: null, product_name: "  Caja   Especial " }), "custom:caja especial");
+  assert.equal(matchesProductSegment([{ ...item, product_id: null, product_name: "Caja" }], "custom:caja"), true);
+});
 
 test("active stages follow real completed pieces and never finalize automatically", () => {
   const items = [{ quantity: 43, done_quantity: 38, is_done: false }];

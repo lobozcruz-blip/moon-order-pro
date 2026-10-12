@@ -24,6 +24,17 @@ export function normalizeOrderLabel(value: string) {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("es-MX");
 }
 
+type ProductSegmentItem = { product_id: string | null; product_name: string; quantity: number; done_quantity: number; is_done: boolean };
+
+export function productSegmentKey(item: Pick<ProductSegmentItem, "product_id" | "product_name">) {
+  return item.product_id ? "product:" + item.product_id : "custom:" + normalizeOrderLabel(item.product_name);
+}
+
+export function matchesProductSegment(items: ProductSegmentItem[], key: string, onlyMissing = false) {
+  return key === "__all__" || items.some(item => productSegmentKey(item) === key &&
+    (!onlyMissing || (!item.is_done && Number(item.done_quantity) < Number(item.quantity))));
+}
+
 export function orderLabels(notes: OrderLabelNote[] | undefined) {
   return (notes ?? []).filter(n => n.title === ORDER_LABEL_TITLE && !!n.body?.trim());
 }
