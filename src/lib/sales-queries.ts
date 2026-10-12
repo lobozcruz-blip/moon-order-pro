@@ -1,3 +1,4 @@
+import { confirmedReceivable } from "./order-tracking";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { OrderStatus, PaymentStatus, DeliveryType, Category } from "./cm";
@@ -560,12 +561,10 @@ export function useSalesAnalytics(
       let saldoPendienteTotal = 0;
       let pedidosConSaldoCount = 0;
       allOrders.forEach((o) => {
-        if (o.status !== "cancelado") {
-          const bal = Math.max(0, Number(o.balance ?? (o.total - (o.paid_amount || 0))));
-          if (bal > 0) {
-            saldoPendienteTotal += bal;
-            pedidosConSaldoCount += 1;
-          }
+        const balance = confirmedReceivable(o);
+        if (balance > 0) {
+          saldoPendienteTotal += balance;
+          pedidosConSaldoCount += 1;
         }
       });
 

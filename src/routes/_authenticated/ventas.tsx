@@ -403,21 +403,22 @@ function VentasPage() {
             </div>
           </div>
 
-          {/* 4. Saldo Pendiente Total Global */}
+          {/* Saldo global confirmado: independiente del periodo seleccionado. */}
           <div className="rounded-2xl border border-border bg-card p-4">
             <div className="flex items-center justify-between">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400">
                 <Wallet className="h-5 w-5" />
               </span>
-              <span className="text-[11px] text-amber-400/80 font-bold">Acumulado activo</span>
+              <span className="text-[11px] text-amber-400/80 font-bold">Pedidos con adelanto</span>
             </div>
             <p className="mt-3 font-display text-3xl font-bold tracking-tight text-foreground">
               {money(stats?.saldoPendienteTotal)}
             </p>
             <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-              <span>Pendiente por cobrar</span>
+              <span>Saldo por cobrar con adelanto</span>
               <span className="font-semibold">{stats?.pedidosConSaldoCount} pedidos</span>
             </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">Acumulado de todos los periodos. Excluye cotizaciones sin pago y pedidos cancelados.</p>
           </div>
         </div>
       )}

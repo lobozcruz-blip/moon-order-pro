@@ -39,6 +39,8 @@ import {
   type OrderStatus,
 } from "@/lib/cm";
 import { logActivity } from "@/lib/storage";
+import { Progress } from "@/components/ui/progress";
+import { orderLabels, normalizeOrderLabel, productionProgress } from "@/lib/order-tracking";
 import { cn } from "@/lib/utils";
 
 export type PaymentFilter = "confirmados" | "todos" | "sin_pago" | "pago_parcial" | "pagado";
@@ -61,11 +63,12 @@ export const Route = createFileRoute("/_authenticated/pedidos/")({
 
 type Order = ReturnType<typeof useOrders>["data"] extends (infer T)[] | undefined ? T : never;
 
-function progressOf(o: Order) {
-  const items = o.order_items ?? [];
-  const total = items.reduce((a, i) => a + (Number(i.quantity) || 0), 0);
-  const done = items.reduce((a, i) => a + (i.is_done ? (Number(i.quantity) || 0) : (Number(i.done_quantity) || 0)), 0);
-  return total ? Math.round((done / total) * 100) : 0;
+function OrderProgress({ order }: { order: Order }) {
+  const { total, done, percent } = productionProgress(order.order_items);
+  return <div className="min-w-40 space-y-1" aria-label={`Producción: ${done} de ${total} piezas, ${percent}%`}>
+    <div className="flex justify-between gap-3 text-[11px] text-muted-foreground"><span>Producción</span><span>{done} / {total} piezas ({percent}%)</span></div>
+    <Progress value={percent} className="h-1.5" />
+  </div>;
 }
 
 function Pedidos() {
@@ -79,6 +82,14 @@ function Pedidos() {
   const [view, setView] = useState<"kanban" | "lista">("lista");
   const [onlyPending, setOnlyPending] = useState(true);
   const [sort, setSort] = useState("prioridad");
+  const [labelFilter, setLabelFilter] = useState("__all__");
+  const labelOptions = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const o of orders ?? []) for (const n of orderLabels(o.order_notes)) {
+      names.set(normalizeOrderLabel(n.body!), n.body!);
+    }
+    return [...names.entries()].sort((a, b) => a[1].localeCompare(b[1], "es"));
+  }, [orders]);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<OrderStatus | "todos">("todos");
   const [assignee, setAssignee] = useState<string>("todos");
@@ -94,6 +105,7 @@ function Pedidos() {
     const counts = { todos: 0, sin_pago: 0, pago_parcial: 0, pagado: 0 };
     for (const o of orders ?? []) {
       if (onlyPending && ["finalizado", "cancelado"].includes(o.status)) continue;
+      if (labelFilter !== "__all__" && !orderLabels(o.order_notes).some(n => "label:" + normalizeOrderLabel(n.body!) === labelFilter)) continue;
       if (cliente && o.customer_id !== cliente) continue;
       if (status !== "todos" && o.status !== status) continue;
       if (assignee !== "todos" && o.assignee_id !== assignee) continue;
@@ -105,12 +117,13 @@ function Pedidos() {
       }
     }
     return counts;
-  }, [orders, cliente, status, assignee, onlyPending]);
+  }, [orders, cliente, status, assignee, onlyPending, labelFilter]);
 
   const rows = useMemo(() => {
     const t = q.trim().toLowerCase();
     return (orders ?? []).filter(
       (o) =>
+        (labelFilter === "__all__" || orderLabels(o.order_notes).some(n => "label:" + normalizeOrderLabel(n.body!) === labelFilter)) &&
         (!cliente || o.customer_id === cliente) &&
         (!onlyPending || !["finalizado", "cancelado"].includes(o.status)) &&
         (status === "todos" || o.status === status) &&
@@ -120,7 +133,7 @@ function Pedidos() {
           (o.folio ?? "").toLowerCase().includes(t) ||
           fullName(o.customers?.first_name, o.customers?.last_name).toLowerCase().includes(t)),
     ).sort(sort === "prioridad" ? compareOrderPriority : (a, b) => b.created_at.localeCompare(a.created_at));
-  }, [orders, q, status, assignee, cliente, paymentFilter, sort, onlyPending]);
+  }, [orders, q, status, assignee, cliente, paymentFilter, sort, onlyPending, labelFilter]);
 
   const move = async (id: string, next: OrderStatus, prev: OrderStatus) => {
     if (next === prev) return;
@@ -188,6 +201,10 @@ function Pedidos() {
       />
 
       <div className="mb-3 flex flex-wrap gap-2">
+        <Select value={labelFilter} onValueChange={setLabelFilter}>
+          <SelectTrigger className="w-64" aria-label="Filtrar pedidos por etiqueta"><SelectValue placeholder="Todas las etiquetas" /></SelectTrigger>
+          <SelectContent><SelectItem value="__all__">Todas las etiquetas</SelectItem>{labelOptions.map(([key, name]) => <SelectItem key={key} value={"label:" + key}>{name}</SelectItem>)}</SelectContent>
+        </Select>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={onlyPending} onChange={e => setOnlyPending(e.target.checked)} />Sólo pendientes</label>
         <Button variant={paymentFilter === "confirmados" ? "default" : "outline"} onClick={() => setPaymentFilter("confirmados")}>Pedidos con pago o adelanto</Button>
         <Button variant={paymentFilter === "sin_pago" ? "default" : "outline"} onClick={() => setPaymentFilter("sin_pago")}>Cotizaciones sin pago</Button>
@@ -408,6 +425,8 @@ function Pedidos() {
                 </span>
                 <span className="text-xs text-muted-foreground">{dateFmt(o.due_date)}</span>
                 <span className="w-24 text-right text-sm font-semibold">{money(displayTotal)}</span>
+                <div className="w-full sm:w-56"><OrderProgress order={o} /></div>
+                {orderLabels(o.order_notes).length > 0 && <div className="flex w-full flex-wrap gap-1">{orderLabels(o.order_notes).map(n => <span key={n.id} className="chip bg-primary/10 text-primary">{n.body}</span>)}</div>}
               </Link>
             );
           })}
@@ -477,7 +496,6 @@ function OrderCard({
     id: order.id,
     disabled: !draggable,
   });
-  const pct = progressOf(order);
   const priority = PRIORITIES.find((p) => p.value === order.priority)?.label;
   const today = new Date().toISOString().slice(0, 10);
   const late = order.due_date && order.due_date < today && order.status !== "finalizado";
@@ -520,9 +538,8 @@ function OrderCard({
         </Link>
       </div>
 
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-background">
-        <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
-      </div>
+      <div className="mt-2"><OrderProgress order={order} /></div>
+      {orderLabels(order.order_notes).length > 0 && <div className="mt-2 flex flex-wrap gap-1">{orderLabels(order.order_notes).map(n => <span key={n.id} className="chip bg-primary/10 text-primary">{n.body}</span>)}</div>}
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <span

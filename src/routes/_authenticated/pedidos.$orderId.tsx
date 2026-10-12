@@ -80,6 +80,8 @@ import { OrderPrintSheetModal, type OrderPrintSheetData } from "@/components/Ord
 import { CustomDesignViewerModal } from "@/components/orders/CustomDesignViewerModal";
 import { buildCustomerOrderSummary, resolveOrderItemDisplayImage } from "@/lib/order-summary";
 import { useAuth } from "@/lib/auth";
+import { OrderLabelsEditor } from "@/components/orders/OrderLabelsEditor";
+import { ORDER_LABEL_TITLE, productionProgress } from "@/lib/order-tracking";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/pedidos/$orderId")({
@@ -201,9 +203,7 @@ function DetallePedido() {
   };
 
   const items = order.order_items ?? [];
-  const totalUnits = items.reduce((a, i) => a + (Number(i.quantity) || 0), 0);
-  const doneUnits = items.reduce((a, i) => a + (i.is_done ? (Number(i.quantity) || 0) : (Number(i.done_quantity) || 0)), 0);
-  const pct = totalUnits ? Math.round((doneUnits / totalUnits) * 100) : 0;
+  const { total: totalUnits, done: doneUnits, percent: pct } = productionProgress(items);
   const wa = whatsappLink(order.customers?.phone);
 
   const ship = Array.isArray(order.shipping_details) ? order.shipping_details[0] : order.shipping_details;
@@ -864,7 +864,7 @@ function DetallePedido() {
             </TabsContent>
 
             <TabsContent value="notas" className="mt-4">
-              <Notas orderId={orderId} notes={order.order_notes ?? []} onChange={() => invalidate("order")} />
+              <Notas orderId={orderId} notes={(order.order_notes ?? []).filter(n => n.title !== ORDER_LABEL_TITLE)} onChange={() => invalidate("order")} />
             </TabsContent>
 
             <TabsContent value="entrega" className="mt-4">
@@ -898,6 +898,7 @@ function DetallePedido() {
 
           <section className="panel space-y-3 p-4">
             <h2 className="font-display text-lg">Gestión</h2>
+            <OrderLabelsEditor orderId={orderId} notes={order.order_notes ?? []} />
             <div className="space-y-2">
               <Label>Estado</Label>
               <Select
